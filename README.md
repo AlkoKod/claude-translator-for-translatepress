@@ -2,7 +2,11 @@
 
 A small, independent WordPress plugin that adds **Anthropic Claude (direct API)** to TranslatePress's native automatic translation providers, plus a resumable bulk translation runner.
 
-**0.2.3 is a preview release.** The local integration suite passes against WordPress 7.1.3, TranslatePress 3.3.8 and the Developer 1.8.8 add-on, on PHP 8.4.26 and MariaDB 11.4.5. Anthropic responses are mocked in automated tests; a live-key smoke test and staging verification are required before production use. No premium TranslatePress code is included in this repository.
+**0.2.4 is a preview release.** The local integration suite passes against WordPress 7.1.3, TranslatePress 3.3.8 and the Developer 1.8.8 add-on, on PHP 8.4.26 and MariaDB 11.4.5. Anthropic responses are mocked in automated tests; a live-key smoke test and staging verification are required before production use. No premium TranslatePress code is included in this repository.
+
+## Workspace selection (0.2.4)
+
+If your API key is not scoped to one workspace, set the optional **Workspace ID** under Tools → Claude Translate. Copy the wrkspc_ ID from Claude Console → Settings → Workspaces, then save and resume the existing job. The ID is sent only in the anthropic-workspace-id header and is validated before any HTTP request. Keys already scoped to one workspace can leave this blank. Server configuration can instead define CTP_ANTHROPIC_WORKSPACE_ID in wp-config.php. Changing workspace selection does not erase saved TRP translations or provider results. See [Anthropic authentication](https://platform.claude.com/docs/en/manage-claude/authentication#select-a-workspace).
 
 ## Restricted response diagnostics (0.2.3)
 

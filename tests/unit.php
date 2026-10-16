@@ -129,6 +129,28 @@ foreach ( array( 'duplicate', 'html', 'truncated', '429', 'network', 'bad_json',
 }
 $mode = 'thinking';
 check( $client->translate( array( 'Vítejte' ), 'cs_CZ', 'de_DE' ) === array( 'Willkommen' ), 'JSON text parsed independently of thinking blocks' );
+check( CTP_Support::workspace_id() === '', 'existing settings default to no workspace header' );
+foreach ( array( "wrkspc_abc\r\nx-api-key: injected", 'Default', 'wrkspc_abc/def', 'wrkspc_', str_repeat( 'a', 120 ) ) as $invalid_workspace ) {
+    check( ! CTP_Support::valid_workspace_id( $invalid_workspace ), 'invalid workspace ID or header injection rejected' );
+}
+check( CTP_Support::valid_workspace_id( 'wrkspc_01JwQvzr7rXLA5AGx3HKfFUJ' ) && CTP_Support::valid_workspace_id( '' ), 'documented workspace ID and optional blank accepted' );
+$original_mock = $GLOBALS['http_mock'];
+$GLOBALS['http_mock'] = function ( $url, $args ) use ( $original_mock ) {
+    $workspace = CTP_Support::workspace_id();
+    check( $workspace === '' ? ! isset( $args['headers']['anthropic-workspace-id'] ) : ( $args['headers']['anthropic-workspace-id'] ?? '' ) === $workspace, 'workspace header is sent only when selected' );
+    check( ! str_contains( $args['body'], 'wrkspc_' ), 'workspace ID stays outside translation prompt' );
+    return $original_mock( $url, $args );
+};
+update_option( 'ctp_settings', array_merge( CTP_Support::config(), array( 'workspace_id' => 'wrkspc_01JwQvzr7rXLA5AGx3HKfFUJ' ) ) );
+check( $client->translate( array( 'Vítejte' ), 'cs_CZ', 'de_DE' ) === array( 'Willkommen' ), 'translation succeeds with selected workspace' );
+update_option( 'ctp_settings', array_merge( CTP_Support::config(), array( 'workspace_id' => '' ) ) );
+check( $client->translate( array( 'Vítejte' ), 'cs_CZ', 'de_DE' ) === array( 'Willkommen' ), 'workspace-scoped keys retain omitted-header behavior' );
+$before_workspace = $calls;
+update_option( 'ctp_settings', array_merge( CTP_Support::config(), array( 'workspace_id' => "wrkspc_bad\r\ninjected" ) ) );
+check( $client->translate( array( 'Vítejte' ), 'cs_CZ', 'de_DE' ) === array() && $calls === $before_workspace, 'invalid stored workspace rejected before HTTP or reservation' );
+update_option( 'ctp_settings', array_merge( CTP_Support::config(), array( 'workspace_id' => '' ) ) );
+check( str_contains( CTP_Client::http_error( 400, '{"error":{"message":"This API key is not scoped to a workspace; include anthropic-workspace-id"}}' ), 'Set Workspace ID' ), 'reported production error now has actionable workspace guidance' );
+$GLOBALS['http_mock'] = $original_mock;
 $before = $calls;
 check( $client->translate( array( '<? //silence' ), 'cs_CZ', 'de_DE' ) === array() && $calls === $before, 'broken PHP source rejected before billing' );
 update_option( 'ctp_settings', array( 'api_key' => 'TEST_NOT_A_REAL_KEY', 'daily_chars' => 1 ) );

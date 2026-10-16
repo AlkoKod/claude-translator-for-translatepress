@@ -13,6 +13,11 @@ final class CTP_Client {
             CTP_Support::fail( 'missing_key', 'Configure an Anthropic API key first.' );
             return array();
         }
+        $workspace = CTP_Support::workspace_id();
+        if ( ! CTP_Support::valid_workspace_id( $workspace ) ) {
+            CTP_Support::fail( 'invalid_workspace', 'Enter a valid Anthropic Workspace ID (wrkspc_...) under Tools → Claude Translate.' );
+            return array();
+        }
         $items = $codecs = array();
         $bytes = 0;
         foreach ( $strings as $key => $text ) {
@@ -50,9 +55,11 @@ final class CTP_Client {
             $request['thinking'] = array( 'type' => 'between_tools' );
             $request['output_config']['effort'] = 'low';
         }
+        $headers = array( 'x-api-key' => CTP_Support::key(), 'anthropic-version' => '2023-06-01', 'content-type' => 'application/json' );
+        if ( $workspace !== '' ) { $headers['anthropic-workspace-id'] = $workspace; }
         $response = wp_remote_post( self::ENDPOINT, array(
             'timeout' => 60, 'redirection' => 0, 'sslverify' => true,
-            'headers' => array( 'x-api-key' => CTP_Support::key(), 'anthropic-version' => '2023-06-01', 'content-type' => 'application/json' ),
+            'headers' => $headers,
             'body' => wp_json_encode( $request ), 'limit_response_size' => 262144,
         ) );
         if ( is_wp_error( $response ) ) {
@@ -121,7 +128,9 @@ final class CTP_Client {
         } elseif ( $code >= 500 ) {
             $reason = 'Anthropic is temporarily unavailable. Resume later; an ambiguous failure may already have incurred usage.';
         } elseif ( $code === 400 || $code === 404 ) {
-            if ( str_contains( $message, 'credit balance' ) || str_contains( $message, 'purchase credits' ) ) {
+            if ( str_contains( $message, 'anthropic-workspace-id' ) || str_contains( $message, 'not scoped to a workspace' ) ) {
+                $reason = 'This API key requires a workspace selection. Set Workspace ID under Tools → Claude Translate, or use a key scoped to one workspace, then resume.';
+            } elseif ( str_contains( $message, 'credit balance' ) || str_contains( $message, 'purchase credits' ) ) {
                 $reason = 'API credit balance is too low. Add API credits in the Anthropic Console, then resume. A Claude chat subscription does not provide API credits.';
             } elseif ( str_contains( $message, 'model' ) && preg_match( '/not found|does not exist|access|not available|invalid model/', $message ) ) {
                 $reason = 'Selected model is unavailable or inaccessible to this API account. Verify model access in the Anthropic Console.';

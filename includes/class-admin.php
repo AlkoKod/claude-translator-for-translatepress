@@ -44,11 +44,14 @@ final class CTP_Admin {
         if ( ! preg_match( '/^claude-[a-zA-Z0-9._-]{1,100}$/D', $model ) ) { wp_die( 'Enter a valid Claude model ID.' ); }
         $key = trim( (string) wp_unslash( $_POST['api_key'] ?? '' ) );
         if ( $key !== '' && ! preg_match( '/^[a-zA-Z0-9_-]{20,250}$/D', $key ) ) { wp_die( 'The API key has an invalid format.' ); }
+        $workspace = trim( (string) wp_unslash( $_POST['workspace_id'] ?? $old['workspace_id'] ) );
+        if ( ! CTP_Support::valid_workspace_id( $workspace ) ) { wp_die( 'Enter a valid Workspace ID starting with wrkspc_ (not the workspace name).' ); }
         $config = array(
             'api_key' => isset( $_POST['clear_key'] ) ? '' : ( $key !== '' ? $key : $old['api_key'] ),
             'model' => $model, 'context' => substr( sanitize_textarea_field( wp_unslash( $_POST['context'] ?? '' ) ), 0, 6000 ),
             'daily_chars' => max( 1000, min( 100000000, absint( $_POST['daily_chars'] ?? 100000 ) ) ),
             'visitor_translation' => ! empty( $_POST['visitor_translation'] ),
+            'workspace_id' => $workspace,
         );
         update_option( 'ctp_settings', $config, false );
         if ( ! empty( $_POST['clear_provider_cache'] ) ) { update_option( 'ctp_cache_epoch', wp_generate_uuid4(), false ); }
@@ -96,6 +99,10 @@ final class CTP_Admin {
                             <input id="ctp-key" type="password" name="api_key" value="" autocomplete="new-password" class="regular-text" placeholder="<?php echo CTP_Support::key() ? 'Key configured — leave blank to keep' : 'sk-ant-…'; ?>" <?php disabled( defined( 'CTP_ANTHROPIC_API_KEY' ) ); ?>>
                             <p class="description">Never displayed again. Alternatively define CTP_ANTHROPIC_API_KEY in wp-config.php. API usage is billed by Anthropic.</p>
                             <?php if ( ! defined( 'CTP_ANTHROPIC_API_KEY' ) ) : ?><label><input type="checkbox" name="clear_key" value="1"> Remove stored key</label><?php endif; ?>
+                        </td></tr>
+                        <tr><th><label for="ctp-workspace">Workspace ID (optional)</label></th><td>
+                            <input id="ctp-workspace" name="workspace_id" value="<?php echo esc_attr( CTP_Support::workspace_id() ); ?>" class="regular-text" placeholder="wrkspc_…" maxlength="107" <?php disabled( defined( 'CTP_ANTHROPIC_WORKSPACE_ID' ) ); ?>>
+                            <p class="description">Required for keys that are not scoped to one workspace. Copy the ID from Claude Console → Settings → Workspaces (ID column). Leave blank for a workspace-scoped key. Alternatively define CTP_ANTHROPIC_WORKSPACE_ID in wp-config.php.</p>
                         </td></tr>
                         <tr><th><label for="ctp-model">Model ID</label></th><td><input id="ctp-model" name="model" value="<?php echo esc_attr( $config['model'] ); ?>" class="regular-text" required><p class="description">Default: claude-sonnet-5-5. Use a model available to your Anthropic account that supports structured JSON output.</p></td></tr>
                         <tr><th><label for="ctp-context">Site context / terminology</label></th><td><textarea id="ctp-context" name="context" rows="4" class="large-text" maxlength="6000"><?php echo esc_textarea( $config['context'] ); ?></textarea><p class="description">For example: hospitality website, formal German Sie, preserve the brand name.</p></td></tr>

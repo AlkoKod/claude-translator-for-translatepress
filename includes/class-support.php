@@ -11,12 +11,20 @@ final class CTP_Support {
     public static function config(): array {
         return wp_parse_args( get_option( 'ctp_settings', array() ), array(
             'model' => 'claude-sonnet-5-5', 'context' => '', 'daily_chars' => 100000,
-            'visitor_translation' => false, 'api_key' => '',
+            'visitor_translation' => false, 'api_key' => '', 'workspace_id' => '',
         ) );
     }
 
     public static function key(): string {
         return defined( 'CTP_ANTHROPIC_API_KEY' ) ? (string) CTP_ANTHROPIC_API_KEY : (string) self::config()['api_key'];
+    }
+
+    public static function workspace_id(): string {
+        return trim( defined( 'CTP_ANTHROPIC_WORKSPACE_ID' ) ? (string) CTP_ANTHROPIC_WORKSPACE_ID : (string) self::config()['workspace_id'] );
+    }
+
+    public static function valid_workspace_id( string $id ): bool {
+        return $id === '' || (bool) preg_match( '/^wrkspc_[A-Za-z0-9]{1,100}$/D', $id );
     }
 
     public static function trp_settings(): array {
