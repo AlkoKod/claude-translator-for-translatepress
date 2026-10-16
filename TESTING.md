@@ -1,4 +1,4 @@
-# Verification record — 0.3.0 preview
+# Verification record — 0.3.1 preview
 
 Date: 2026-10-16.
 
@@ -12,7 +12,7 @@ Date: 2026-10-16.
 ## Passed
 
 - PHP lint for all runtime and test PHP files; `node --check assets/admin.js`.
-- `php tests/unit.php`: **200 assertions**. HTML/attributes/shortcode/printf/TRP placeholder round-trips; missing/duplicated/reordered placeholders; injected HTML; malformed/truncated/duplicate-ID responses; HTTP 429/transport errors; upstream diagnostic redaction; exact same-origin crawl restrictions; daily cap before HTTP; lock ownership and exclusion. Sonnet 5.5 checks verify structured JSON, no forced tools, between_tools thinking, low effort, refusal handling, unexpected response blocks/fields, malformed JSON and reasoning-block separation.
+- `php tests/unit.php`: **230 assertions**. HTML/attributes/shortcode/printf/TRP placeholder round-trips; missing/duplicated/reordered placeholders; injected HTML; malformed/truncated/duplicate-ID responses; HTTP 429/transport errors; upstream diagnostic redaction; exact same-origin crawl restrictions; daily cap before HTTP; lock ownership and exclusion. Sonnet 5.5 checks verify structured JSON, no forced tools, between_tools thinking, low effort, refusal handling, unexpected response blocks/fields, malformed JSON and reasoning-block separation.
 - `wp eval-file tests/integration.php`: **21 assertions**, running against real WordPress/TRP tables and real local HTTP page rendering with only the Anthropic response mocked. Checks upgraded Sonnet 5.5 model, provider registry, default visitor-call suppression, native dictionary persistence, repeated-render reuse, failed-response non-persistence, human edit during an API call, fresh-install start without pre-existing pause/usage options, pause/resume, full bulk lifecycle with en_GB, unsigned scan fail-closed behavior, rendered Divi/Oxygen/Bricks-shaped fixture text, SEO slug persistence for both DE/EN, and **zero further API calls on a second complete bulk run**.
 - Admin progress tests: **12 assertions** for missing, empty and zero-valued usage counters.
 - Unauthenticated `ctp_admin` job-control request returns HTTP 400 with WordPress `0`; there is no public AJAX handler.
@@ -40,3 +40,6 @@ Version 0.2.6: 200 standalone protocol/security assertions, 21 admin UI assertio
 Full 21-assertion WordPress/TRP bulk integration suite also rerun successfully on 0.2.6, including en_GB, SEO persistence, pause/resume and zero additional API calls on the second full run.
 
 Version 0.3.0: 200 protocol/security assertions, 35 admin UI assertions, 22 real WordPress/TRP reset assertions and the full 21-assertion bulk suite passed. Reset tests cover admin access, source-language rejection, preview without deletion, exact typed confirmation, one-use tokens, clearing manual/machine/gettext/current SEO translations, preserving unselected languages, full dictionary removal of malformed historical rows, unchanged API/model/usage, no network calls, forced second-table SQL failure with rollback and stale in-flight response rejection. UI tests cover explicit preview/confirmation flow and selection invalidation. All tests ran only on the disposable local site; no production reset or paid API call was performed.
+
+Version 0.3.1: 230 protocol/security assertions, 35 admin UI assertions, 10 real TRP output-validation assertions, 22 reset assertions, 12 XML assertions and 12 inspector assertions passed. Tests verify protected operators/entities, non-linguistic bypass without network/usage, continued rejection of injected HTML/empty output, exact failed-row diagnostics and inspector support. Real TRP may canonicalize entity spelling; persistence tests compare rendered text. No live model response from the user's failure has been inspected, so its original cause remains unconfirmed. All API responses in tests are mocked.
+The full 21-assertion bulk integration suite also passed sequentially on 0.3.1, including persistence reuse on a second complete run.

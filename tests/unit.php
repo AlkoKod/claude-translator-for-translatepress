@@ -46,6 +46,12 @@ $encoded = $codec->encode( $original );
 check( ! str_contains( $encoded, '<a' ) && ! str_contains( $encoded, 'https://' ), 'attributes and HTML never sent as editable text' );
 check( $codec->decode( str_replace( 'Vítejte', 'Willkommen', $encoded ) ) === str_replace( 'Vítejte', 'Willkommen', $original ), 'HTML, shortcode and placeholders preserved' );
 rejects( fn() => $codec->decode( $encoded . '<script>alert(1)</script>' ), 'new HTML rejected' );
+foreach ( array( 'Vítejte > 5, < 10', 'Vítejte &lt; 5 &gt; 1 &amp; &#160; &#xA0;', '<span>Vítejte</span><!-- unchanged -->' ) as $special ) {
+    $special_codec = new CTP_Codec(); $special_encoded = $special_codec->encode( $special );
+    check( ! str_contains( $special_encoded, '<' ) && ! str_contains( $special_encoded, '>' ) && ! str_contains( $special_encoded, '&lt;' ), 'literal angle brackets, entities and markup protected before API' );
+    check( $special_codec->decode( str_replace( 'Vítejte', 'Willkommen', $special_encoded ) ) === str_replace( 'Vítejte', 'Willkommen', $special ), 'special characters and entities round-trip unchanged' );
+    check( $special_codec->has_translatable_text( $special_encoded ), 'human text around markup remains translatable' );
+}
 preg_match_all( '/CTPX\w+?X/', $encoded, $tokens );
 rejects( fn() => $codec->decode( $encoded . $tokens[0][0] ), 'duplicate token rejected' );
 rejects( fn() => $codec->decode( str_replace( $tokens[0][0], '', $encoded ) ), 'missing token rejected' );
@@ -78,6 +84,8 @@ $GLOBALS['http_mock'] = function ( $url, $args ) use ( &$calls, &$mode ) {
     $translations = array_map( static fn( $s ) => array( 'id' => $s['id'], 'text' => str_replace( 'Vítejte', 'Willkommen', $s['text'] ) ), $strings );
     if ( $mode === 'duplicate' ) { $translations[1]['id'] = $translations[0]['id']; }
     if ( $mode === 'html' ) { $translations[0]['text'] .= '<img src=x onerror=alert(1)>'; }
+    if ( $mode === 'empty' ) { $translations[0]['text'] = ''; }
+    if ( $mode === 'angle' ) { $translations[0]['text'] .= ' >'; }
     if ( $mode === 'extra_field' ) { $translations[0]['unexpected'] = 'bad'; }
     $text = $mode === 'bad_json' ? '{invalid' : json_encode( array( 'translations' => array_reverse( $translations ) ) );
     $content = array( array( 'type' => 'text', 'text' => $text ) );
@@ -123,9 +131,10 @@ check( strlen( $diagnostic ) < 1800, 'diagnostic detail length bounded' );
 check( str_contains( $diagnostic, 'req_abcdef1234567890' ), 'body request ID fallback supported' );
 $out = $client->translate( array( 8 => 'Vítejte', 19 => '<b>Vítejte</b>' ), 'cs_CZ', 'de_DE' );
 check( $out[8] === 'Willkommen' && $out[19] === '<b>Willkommen</b>', 'IDs preserve non-sequential TRP keys despite reversed output' );
-foreach ( array( 'duplicate', 'html', 'truncated', '429', 'network', 'bad_json', 'extra_field', 'two_texts', 'tool_response', 'refusal' ) as $mode ) {
+foreach ( array( 'duplicate', 'html', 'empty', 'angle', 'truncated', '429', 'network', 'bad_json', 'extra_field', 'two_texts', 'tool_response', 'refusal' ) as $mode ) {
     check( $client->translate( array( 'Vítejte', 'Vítejte znovu' ), 'cs_CZ', 'de_DE' ) === array(), 'bad response rejected atomically: ' . $mode );
     check( ! str_contains( CTP_Support::$error->get_error_message(), 'SECRET' ), 'upstream body never leaked' );
+    if ( in_array( $mode, array( 'html', 'empty', 'angle' ), true ) ) { check( CTP_Support::$failed_original === 'Vítejte', 'invalid model output identifies exact original without exposing output' ); }
 }
 $mode = 'thinking';
 check( $client->translate( array( 'Vítejte' ), 'cs_CZ', 'de_DE' ) === array( 'Willkommen' ), 'JSON text parsed independently of thinking blocks' );
@@ -162,6 +171,10 @@ check( $client->translate( array( '<?xml version="1.0" encoding="UTF-8"?>' ), 'c
 check( $calls === $before_xml && get_option( 'ctp_usage' ) === $usage_before_xml, 'XML declaration does not call API or reserve bytes' );
 $xml_output = $client->translate( array( 4 => '<?xml version="1.0" encoding="UTF-8"?>', 9 => 'Vítejte' ), 'cs_CZ', 'de_DE' );
 check( $xml_output === array( 9 => 'Willkommen' ), 'mixed batch translates human text and preserves input key without XML result' );
+$before_technical = $calls; $technical_usage = get_option( 'ctp_usage' );
+$technical = array( '12345', ' > ', '<span></span>', '&lt;&gt;&nbsp;', 'https://example.test/', '%1$s', '[gallery ids="1"]' );
+check( $client->translate( $technical, 'cs_CZ', 'de_DE' ) === $technical, 'non-linguistic strings are returned unchanged locally' );
+check( $calls === $before_technical && get_option( 'ctp_usage' ) === $technical_usage, 'non-linguistic strings use no API calls or source reservation' );
 $before = $calls;
 check( $client->translate( array( '<? //silence' ), 'cs_CZ', 'de_DE' ) === array() && $calls === $before, 'broken PHP source rejected before billing' );
 update_option( 'ctp_settings', array( 'api_key' => 'TEST_NOT_A_REAL_KEY', 'daily_chars' => 1 ) );

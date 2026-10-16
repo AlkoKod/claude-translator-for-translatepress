@@ -5,6 +5,7 @@ final class CTP_Support {
     public static bool $bulk = false;
     public static bool $scan = false;
     public static ?WP_Error $error = null;
+    public static ?string $failed_original = null;
     public static ?string $write_language = null;
     public static array $write_originals = array();
     public static ?string $write_epoch = null;

@@ -2,7 +2,13 @@
 
 A small, independent WordPress plugin that adds **Anthropic Claude (direct API)** to TranslatePress's native automatic translation providers, plus a resumable bulk translation runner.
 
-**0.3.0 is a preview release.** The local integration suite passes against WordPress 7.1.3, TranslatePress 3.3.8 and the Developer 1.8.8 add-on, on PHP 8.4.26 and MariaDB 11.4.5. Anthropic responses are mocked in automated tests; a live-key smoke test and staging verification are required before production use. No premium TranslatePress code is included in this repository.
+**0.3.1 is a preview release.** The local integration suite passes against WordPress 7.1.3, TranslatePress 3.3.8 and the Developer 1.8.8 add-on, on PHP 8.4.26 and MariaDB 11.4.5. Anthropic responses are mocked in automated tests; a live-key smoke test and staging verification are required before production use. No premium TranslatePress code is included in this repository.
+
+## Output validation and non-linguistic input (0.3.1)
+
+Literal angle brackets and HTML entities are protected before translation, along with existing markup and placeholders. Strings containing no letters outside protected tokens are returned unchanged locally without an API request or source-byte reservation. Human text around protected tokens still goes to Claude. Newly introduced HTML, empty text, changed placeholders and invalid output remain rejected. There is no automatic paid retry or silent dropping of failed human strings.
+
+Empty output and introduced markup now have separate errors. When the failed original can be matched to a regular/gettext row, the job reports its exact ID and the existing Inspect blocked source tool can display it. An old generic error alone cannot establish which condition occurred. Update and resume an existing job; saved translations and visitor settings are retained.
 
 ## Reset and rebuild dictionaries (0.3.0)
 

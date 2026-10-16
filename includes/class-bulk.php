@@ -140,10 +140,10 @@ final class CTP_Bulk {
         global $wpdb;
         $job = get_option( 'ctp_job', array() );
         if ( ! $job || ! get_option( 'ctp_paused', true ) || ! in_array( $job['phase'], array( 'translate', 'gettext' ), true ) ||
-            ! preg_match( '/^(?:Dictionary row (\d+) contains code or an oversized block\.|Unsafe or oversized gettext source at row (\d+)\.)/', $job['error'] ?? '', $matches ) ) {
+            ! preg_match( '/^(?:Dictionary row (\d+) contains code or an oversized block\.|Unsafe or oversized gettext source at row (\d+)\.|Translation validation failed at (?:dictionary|gettext) row (\d+):)/', $job['error'] ?? '', $matches ) ) {
             throw new RuntimeException( 'No blocked dictionary source is recorded. Keep the existing job paused after its source error.' );
         }
-        $id = (int) ( ( $matches[1] ?? '' ) ?: ( $matches[2] ?? 0 ) );
+        $id = (int) ( ( $matches[1] ?? '' ) ?: ( ( $matches[2] ?? '' ) ?: ( $matches[3] ?? 0 ) ) );
         $language = $job['languages'][$job['language_index']] ?? '';
         $settings = CTP_Support::trp_settings();
         if ( ! in_array( $language, $settings['translation-languages'], true ) || $language === $settings['default-language'] ) {
@@ -164,6 +164,7 @@ final class CTP_Bulk {
         if ( $wpdb->last_error || ! $row ) { throw new RuntimeException( 'The blocked dictionary row could not be read. Nothing was changed.' ); }
         $source = (string) $row['source'];
         $reasons = array();
+        if ( str_starts_with( $job['error'], 'Translation validation failed at ' ) ) { $reasons[] = 'Claude output failed validation; see the job error for the exact reason. This does not by itself indicate a problem in the original source.'; }
         if ( (int) $row['source_bytes'] > CTP_Client::MAX_BYTES ) { $reasons[] = 'Source exceeds the 12,000-byte request limit.'; }
         if ( CTP_Support::is_xml_declaration( $source ) && (int) $row['source_bytes'] <= strlen( $source ) ) {
             $reasons[] = 'Pure XML declaration: non-translatable metadata. Resume to leave this row unchanged and continue.';
@@ -280,10 +281,15 @@ final class CTP_Bulk {
             $strings[] = $text; $processed_ids[] = $cursor; $bytes += strlen( $text );
         }
         if ( $strings ) {
-            CTP_Support::$bulk = true; CTP_Support::$error = null;
+            CTP_Support::$bulk = true; CTP_Support::$error = null; CTP_Support::$failed_original = null;
             // TRP's normal renderer consults its dictionary before calling our engine and saves results itself.
             $trp->get_component( 'translation_render' )->process_strings( $strings, $language );
-            if ( CTP_Support::$error ) { throw new RuntimeException( CTP_Support::$error->get_error_message() ); }
+            if ( CTP_Support::$error ) {
+                foreach ( $rows as $row ) {
+                    if ( $row['original'] === CTP_Support::$failed_original ) { throw new RuntimeException( 'Translation validation failed at dictionary row ' . (int) $row['id'] . ': ' . CTP_Support::$error->get_error_message() ); }
+                }
+                throw new RuntimeException( CTP_Support::$error->get_error_message() );
+            }
             // Verify the exact pending row IDs; a collation-equivalent title is not proof that a slug row was saved.
             $pending = (int) $wpdb->get_var( "SELECT COUNT(*) FROM `{$table}` WHERE id IN (" . implode( ',', $processed_ids ) . ') AND status=0' );
             if ( $wpdb->last_error || $pending ) {
@@ -332,9 +338,15 @@ final class CTP_Bulk {
         if ( $queue ) {
             // Expose TRP's protected queue runner without copying its persistence implementation.
             require_once CTP_DIR . 'includes/class-gettext-runner.php';
-            CTP_Support::$bulk = true; CTP_Support::$error = null;
+            CTP_Support::$bulk = true; CTP_Support::$error = null; CTP_Support::$failed_original = null;
             ( new CTP_Gettext_Runner( CTP_Support::trp_settings() ) )->run_queue( $queue, $language );
-            if ( CTP_Support::$error ) { throw new RuntimeException( CTP_Support::$error->get_error_message() ); }
+            if ( CTP_Support::$error ) {
+                foreach ( $rows as $row ) {
+                    $effective = $row['original_plural'] && (int) $row['plural_form'] > 0 ? $row['original_plural'] : $row['original'];
+                    if ( $effective === CTP_Support::$failed_original ) { throw new RuntimeException( 'Translation validation failed at gettext row ' . (int) $row['id'] . ': ' . CTP_Support::$error->get_error_message() ); }
+                }
+                throw new RuntimeException( CTP_Support::$error->get_error_message() );
+            }
             $ids = array_map( 'intval', array_column( $queue, 'id' ) );
             $pending = (int) $wpdb->get_var( "SELECT COUNT(*) FROM `{$table}` WHERE id IN (" . implode( ',', $ids ) . ') AND status=0' );
             if ( $wpdb->last_error || $pending ) { throw new RuntimeException( 'Gettext translations were not saved. Check TRP exclusions and quota, then resume.' ); }
