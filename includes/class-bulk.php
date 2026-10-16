@@ -165,7 +165,9 @@ final class CTP_Bulk {
         $source = (string) $row['source'];
         $reasons = array();
         if ( (int) $row['source_bytes'] > CTP_Client::MAX_BYTES ) { $reasons[] = 'Source exceeds the 12,000-byte request limit.'; }
-        if ( str_contains( $source, '<?' ) ) { $reasons[] = 'Contains a PHP/XML opening marker (<?).'; }
+        if ( CTP_Support::is_xml_declaration( $source ) && (int) $row['source_bytes'] <= strlen( $source ) ) {
+            $reasons[] = 'Pure XML declaration: non-translatable metadata. Resume to leave this row unchanged and continue.';
+        } elseif ( str_contains( $source, '<?' ) ) { $reasons[] = 'Contains a PHP/XML opening marker (<?).'; }
         if ( preg_match( '~<(?:script|style)\b~i', $source ) ) { $reasons[] = 'Contains a script or style tag.'; }
         if ( ! $reasons ) { $reasons[] = 'No blocker in the preview. The source may have changed, or a marker may occur after the first 6,000 characters.'; }
         $key = CTP_Support::key();
@@ -265,9 +267,10 @@ final class CTP_Bulk {
             }
             return;
         }
-        $strings = $processed_ids = array(); $bytes = 0; $cursor = $job['cursor']; $skipped = 0;
+        $strings = $processed_ids = array(); $bytes = 0; $cursor = $job['cursor']; $skipped = $xml_skipped = 0;
         foreach ( $rows as $row ) {
             $text = $row['original'];
+            if ( CTP_Support::is_xml_declaration( $text ) ) { $cursor = (int) $row['id']; ++$skipped; ++$xml_skipped; continue; }
             if ( $strings && $bytes + strlen( $text ) > CTP_Client::MAX_BYTES ) { break; }
             if ( strlen( $text ) > CTP_Client::MAX_BYTES || preg_match( '~<\?|<(?:script|style)\b~i', $text ) ) {
                 throw new RuntimeException( 'Dictionary row ' . (int) $row['id'] . ' contains code or an oversized block. Fix or exclude this source in TRP before resuming.' );
@@ -289,6 +292,7 @@ final class CTP_Bulk {
             $job['translated'] += count( array_unique( $strings ) );
         }
         $job['skipped'] += $skipped;
+        $job['xml_declarations'] = ( $job['xml_declarations'] ?? 0 ) + $xml_skipped;
         $job['cursor'] = $cursor;
     }
 
@@ -311,9 +315,10 @@ final class CTP_Bulk {
             }
             return;
         }
-        $queue = array(); $bytes = 0; $cursor = $job['cursor'];
+        $queue = array(); $bytes = 0; $cursor = $job['cursor']; $xml_skipped = 0;
         foreach ( $rows as $row ) {
             $text = $row['original_plural'] && (int) $row['plural_form'] > 0 ? $row['original_plural'] : $row['original'];
+            if ( CTP_Support::is_xml_declaration( $text ) ) { $cursor = (int) $row['id']; ++$xml_skipped; continue; }
             if ( $queue && $bytes + strlen( $text ) > CTP_Client::MAX_BYTES ) { break; }
             if ( strlen( $text ) > CTP_Client::MAX_BYTES || preg_match( '~<\?|<(?:script|style)\b~i', $text ) ) {
                 throw new RuntimeException( 'Unsafe or oversized gettext source at row ' . (int) $row['id'] . '. Correct it before resuming.' );
@@ -335,6 +340,8 @@ final class CTP_Bulk {
             if ( $wpdb->last_error || $pending ) { throw new RuntimeException( 'Gettext translations were not saved. Check TRP exclusions and quota, then resume.' ); }
             $job['translated'] += count( $queue );
         }
+        $job['skipped'] += $xml_skipped;
+        $job['xml_declarations'] = ( $job['xml_declarations'] ?? 0 ) + $xml_skipped;
         $job['cursor'] = $cursor;
     }
 }

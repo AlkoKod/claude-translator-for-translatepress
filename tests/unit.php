@@ -151,6 +151,17 @@ check( $client->translate( array( 'Vítejte' ), 'cs_CZ', 'de_DE' ) === array() &
 update_option( 'ctp_settings', array_merge( CTP_Support::config(), array( 'workspace_id' => '' ) ) );
 check( str_contains( CTP_Client::http_error( 400, '{"error":{"message":"This API key is not scoped to a workspace; include anthropic-workspace-id"}}' ), 'Set Workspace ID' ), 'reported production error now has actionable workspace guidance' );
 $GLOBALS['http_mock'] = $original_mock;
+foreach ( array( '<?xml version="1.0" encoding="UTF-8"?>', "<?xml version='1.0'?>", " \n<?xml version = '1.1' encoding='UTF-16' standalone='yes' ?>\r\n", '<?xml version="1.0" standalone="no"?>' ) as $xml ) {
+    check( CTP_Support::is_xml_declaration( $xml ), 'complete XML declaration recognized' );
+}
+foreach ( array( '<?php // silence ?>', '<? //silence', '<?xml-stylesheet href="file.css"?>', '<?xml version="1.0"?><p>Vítejte</p>', 'Vítejte <?xml version="1.0"?>', '<?xml version="1.0"?><?php echo 1;?>', '<?xml version="1.0" encoding="UTF-8"', '<?xml version="1.0" extra="bad"?>', '<?xml version="1.0\'?>', '<?xml version="1.2"?>', '<script>bad</script>', 'Vítejte' ) as $not_xml ) {
+    check( ! CTP_Support::is_xml_declaration( $not_xml ), 'code, malformed declarations and surrounding human text never classified as metadata' );
+}
+$before_xml = $calls; $usage_before_xml = get_option( 'ctp_usage' );
+check( $client->translate( array( '<?xml version="1.0" encoding="UTF-8"?>' ), 'cs_CZ', 'de_DE' ) === array() && CTP_Support::$error === null, 'pure XML alone needs no translation and causes no error' );
+check( $calls === $before_xml && get_option( 'ctp_usage' ) === $usage_before_xml, 'XML declaration does not call API or reserve bytes' );
+$xml_output = $client->translate( array( 4 => '<?xml version="1.0" encoding="UTF-8"?>', 9 => 'Vítejte' ), 'cs_CZ', 'de_DE' );
+check( $xml_output === array( 9 => 'Willkommen' ), 'mixed batch translates human text and preserves input key without XML result' );
 $before = $calls;
 check( $client->translate( array( '<? //silence' ), 'cs_CZ', 'de_DE' ) === array() && $calls === $before, 'broken PHP source rejected before billing' );
 update_option( 'ctp_settings', array( 'api_key' => 'TEST_NOT_A_REAL_KEY', 'daily_chars' => 1 ) );

@@ -8,6 +8,7 @@ final class CTP_Client {
 
     public function translate( array $strings, string $source, string $target ): array {
         CTP_Support::$error = null;
+        $strings = array_filter( $strings, static fn( $text ) => ! is_string( $text ) || ! CTP_Support::is_xml_declaration( $text ) );
         if ( ! $strings ) { return array(); }
         if ( ! CTP_Support::key() ) {
             CTP_Support::fail( 'missing_key', 'Configure an Anthropic API key first.' );

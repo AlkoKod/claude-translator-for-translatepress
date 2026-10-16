@@ -46,6 +46,7 @@ final class CTP_Engine extends TRP_Machine_Translator {
         $translated = array();
         $batch = array(); $bytes = 0;
         foreach ( $new_strings as $key => $text ) {
+            if ( CTP_Support::is_xml_declaration( $text ) ) { continue; }
             if ( strlen( $text ) > CTP_Client::MAX_BYTES ) {
                 CTP_Support::fail( 'large_string', 'A string exceeds 12 KB. Split the translation block before retrying.' );
                 break;

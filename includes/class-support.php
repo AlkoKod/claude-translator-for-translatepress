@@ -27,6 +27,14 @@ final class CTP_Support {
         return $id === '' || (bool) preg_match( '/^wrkspc_[A-Za-z0-9]{1,100}$/D', $id );
     }
 
+    /** Recognize only an entire XML declaration, never markup, PHP or human text around it. */
+    public static function is_xml_declaration( string $text ): bool {
+        $pattern = <<<'REGEX'
+~\A[\x20\t\r\n]*<\?xml[\x20\t\r\n]+version[\x20\t\r\n]*=[\x20\t\r\n]*(?:"1\.[01]"|'1\.[01]')(?:[\x20\t\r\n]+encoding[\x20\t\r\n]*=[\x20\t\r\n]*(?:"[A-Za-z][A-Za-z0-9._-]*"|'[A-Za-z][A-Za-z0-9._-]*'))?(?:[\x20\t\r\n]+standalone[\x20\t\r\n]*=[\x20\t\r\n]*(?:"(?:yes|no)"|'(?:yes|no)'))?[\x20\t\r\n]*\?>[\x20\t\r\n]*\z~D
+REGEX;
+        return preg_match( $pattern, $text ) === 1;
+    }
+
     public static function trp_settings(): array {
         return TRP_Translate_Press::get_trp_instance()->get_component( 'settings' )->get_settings();
     }
