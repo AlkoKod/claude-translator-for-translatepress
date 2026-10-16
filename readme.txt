@@ -3,7 +3,7 @@ Tags: translatepress, claude, translation, anthropic, multilingual
 Requires at least: 6.5
 Tested up to: 7.1.3
 Requires PHP: 8.1
-Stable tag: 0.2.4
+Stable tag: 0.2.5
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -50,6 +50,9 @@ No. Extra languages, SEO Pack and other premium features still require your norm
 It uses TRP's rendered HTML extraction. Gutenberg rendering and representative Divi/Oxygen/Bricks HTML fixtures are tested. Full builder plugin certification is not claimed.
 
 == Changelog ==
+
+= 0.2.5 =
+Add read-only inspection of the exact dictionary row blocking a paused bulk job. Show bounded literal source preview, byte count and blocking reason with credential masking. No API calls, automatic skipping or dictionary modifications.
 
 = 0.2.4 =
 Support multi-workspace API keys with optional validated Workspace ID and anthropic-workspace-id request header. Add actionable guidance for workspace selection errors. Preserve existing jobs and translations.

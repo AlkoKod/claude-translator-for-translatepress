@@ -2,7 +2,11 @@
 
 A small, independent WordPress plugin that adds **Anthropic Claude (direct API)** to TranslatePress's native automatic translation providers, plus a resumable bulk translation runner.
 
-**0.2.4 is a preview release.** The local integration suite passes against WordPress 7.1.3, TranslatePress 3.3.8 and the Developer 1.8.8 add-on, on PHP 8.4.26 and MariaDB 11.4.5. Anthropic responses are mocked in automated tests; a live-key smoke test and staging verification are required before production use. No premium TranslatePress code is included in this repository.
+**0.2.5 is a preview release.** The local integration suite passes against WordPress 7.1.3, TranslatePress 3.3.8 and the Developer 1.8.8 add-on, on PHP 8.4.26 and MariaDB 11.4.5. Anthropic responses are mocked in automated tests; a live-key smoke test and staging verification are required before production use. No premium TranslatePress code is included in this repository.
+
+## Blocked-source inspection (0.2.5)
+
+When a job pauses because a dictionary row contains code or exceeds 12,000 bytes, click **Inspect blocked source (no API call)** below the job status. This reads only the exact row recorded in the paused job error, in its configured language and regular/gettext table. The first 6,000 characters, total source byte length and detected reason are shown as literal text. The source is never executed, deleted, excluded or sent to the translation API by inspection. Known API credentials are masked; review other content before sharing. The endpoint requires manage_options and the existing admin nonce. Historical bad rows can remain in TRP after their source template is fixed: inspect them before making any dictionary changes.
 
 ## Workspace selection (0.2.4)
 

@@ -1,4 +1,4 @@
-# Verification record — 0.2.4 preview
+# Verification record — 0.2.5 preview
 
 Date: 2026-10-16.
 
@@ -31,3 +31,7 @@ Version 0.2.2 adds 24 standalone assertions for safe HTTP diagnostics. The 21-as
 Version 0.2.3 adds 8 assertions covering bounded error detail, credential/source redaction, markup removal, request ID handling and HTML proxy response detection. Live error cause remains unverified; install this build and resume once to capture the restricted diagnostic. The successful API response/persistence path is unchanged.
 
 Version 0.2.4 adds workspace selection and 27 additional protocol assertions, including actual mocked HTTP header inspection with and without a workspace, invalid stored IDs blocked before HTTP, CRLF injection rejection, no workspace ID in prompts and actionable handling of the production-reported API error. All PHP files linted on PHP 8.4.26 and 12 admin-progress assertions passed. No live paid API call or fresh full integration run performed for this version.
+
+Version 0.2.5: 175 standalone protocol assertions, 21 admin UI assertions and 12 real WordPress/TRP inspector assertions pass. Inspector tests verify exact row selection, UTF-8 length and bounded preview, regular/gettext plural handling, credential masking, rejection of running/unrelated-error jobs, unchanged source/usage and zero network requests. UI tests verify literal textarea display (including closing-textarea/script input), nonce submission, no resume/translate requests and error recovery. The original full bulk suite was last run on 0.2.1; bulk translation behavior is unchanged by this release.
+
+Production footer diagnosis (read-only public HTML, 2026-10-16): current Czech and German output contains an unterminated PHP opening marker immediately before the footer in Oxygen code_block-242-4754. Running the actual TRP 3.3.8 HTML parser locally on the fetched Czech HTML finds zero footer/newsletter nodes; removing only the stray marker yields one footer and one newsletter node. No live template or cache settings changed. German HTTP response reports x-litespeed-cache: hit.

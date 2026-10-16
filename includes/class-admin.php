@@ -71,6 +71,8 @@ final class CTP_Admin {
                 $result = CTP_Bulk::control( $command );
             } elseif ( $command === 'tick' ) {
                 $result = CTP_Bulk::tick();
+            } elseif ( $command === 'inspect_source' ) {
+                $result = CTP_Bulk::inspect_blocked_source();
             } elseif ( $command === 'status' ) {
                 $result = CTP_Bulk::status();
             } else { throw new RuntimeException( 'Unknown command.' ); }
@@ -133,6 +135,12 @@ final class CTP_Admin {
                     <p><button class="button button-primary" type="submit">Start bulk translation</button> <button class="button" type="button" data-ctp="pause">Pause</button> <button class="button" type="button" data-ctp="resume">Resume</button> <button class="button" type="button" data-ctp="cancel">Cancel job</button></p>
                 </form>
                 <div id="ctp-status" role="status" aria-live="polite">Loading job status…</div>
+                <p><button class="button" type="button" id="ctp-inspect-source">Inspect blocked source (no API call)</button></p>
+                <div id="ctp-source-panel" hidden>
+                    <p id="ctp-source-info" role="status"></p>
+                    <textarea id="ctp-source-preview" class="large-text code" rows="8" readonly aria-label="Blocked source preview"></textarea>
+                    <p class="description">Read-only preview of the row blocking this paused job, limited to the first 6,000 characters. Nothing is executed, translated, deleted or excluded. Review for personal data or credentials before copying this preview to support.</p>
+                </div>
                 <p class="description">Keep this page open to run without visitor traffic. For unattended jobs, configure real server cron to run WordPress scheduled events. A running batch finishes before a pause takes effect.</p>
             </section>
             <section class="ctp-card">

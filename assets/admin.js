@@ -55,5 +55,21 @@
       catch (error) { status.textContent = error.message; }
     });
   }
+  const inspect = document.getElementById('ctp-inspect-source');
+  if (inspect) inspect.addEventListener('click', async () => {
+    const panel = document.getElementById('ctp-source-panel');
+    const info = document.getElementById('ctp-source-info');
+    const preview = document.getElementById('ctp-source-preview');
+    panel.hidden = false;
+    preview.value = '';
+    info.textContent = 'Reading blocked source…';
+    inspect.disabled = true;
+    try {
+      const row = await command('inspect_source');
+      info.textContent = `Row ${row.row_id} · ${row.language} · ${row.kind} · ${row.source_bytes} bytes. ${row.reason}`;
+      preview.value = row.source;
+    } catch (error) { info.textContent = error.message; }
+    finally { inspect.disabled = false; }
+  });
   command('status').then(render).catch(error => { status.textContent = error.message; });
 })();

@@ -135,6 +135,46 @@ final class CTP_Bulk {
         } finally { CTP_Support::unlock( 'worker', $lock ); }
     }
 
+    /** Read only the row that blocked the current paused job. Caller must check admin capability and nonce. */
+    public static function inspect_blocked_source(): array {
+        global $wpdb;
+        $job = get_option( 'ctp_job', array() );
+        if ( ! $job || ! get_option( 'ctp_paused', true ) || ! in_array( $job['phase'], array( 'translate', 'gettext' ), true ) ||
+            ! preg_match( '/^(?:Dictionary row (\d+) contains code or an oversized block\.|Unsafe or oversized gettext source at row (\d+)\.)/', $job['error'] ?? '', $matches ) ) {
+            throw new RuntimeException( 'No blocked dictionary source is recorded. Keep the existing job paused after its source error.' );
+        }
+        $id = (int) ( ( $matches[1] ?? '' ) ?: ( $matches[2] ?? 0 ) );
+        $language = $job['languages'][$job['language_index']] ?? '';
+        $settings = CTP_Support::trp_settings();
+        if ( ! in_array( $language, $settings['translation-languages'], true ) || $language === $settings['default-language'] ) {
+            throw new RuntimeException( 'The job language is no longer configured in TranslatePress.' );
+        }
+        $query = TRP_Translate_Press::get_trp_instance()->get_component( 'query' );
+        $gettext = $job['phase'] === 'gettext';
+        $table = $gettext ? $query->get_gettext_table_name( $language ) : $query->get_table_name( $language );
+        if ( ! preg_match( '/^[a-zA-Z0-9_]+$/D', $table ) ) { throw new RuntimeException( 'Invalid dictionary table name.' ); }
+        $sql = "SELECT LENGTH(t.original) AS source_bytes, LEFT(t.original, 6000) AS source FROM `{$table}` t WHERE t.id=%d";
+        if ( $gettext ) {
+            $originals = $query->get_table_name_for_gettext_original_strings();
+            if ( ! preg_match( '/^[a-zA-Z0-9_]+$/D', $originals ) ) { throw new RuntimeException( 'Invalid gettext originals table name.' ); }
+            $expression = 'CASE WHEN t.plural_form>0 AND o.original_plural IS NOT NULL AND o.original_plural<>\'\' THEN o.original_plural ELSE t.original END';
+            $sql = "SELECT LENGTH({$expression}) AS source_bytes, LEFT({$expression}, 6000) AS source FROM `{$table}` t LEFT JOIN `{$originals}` o ON o.id=t.original_id WHERE t.id=%d";
+        }
+        $row = $wpdb->get_row( $wpdb->prepare( $sql, $id ), ARRAY_A );
+        if ( $wpdb->last_error || ! $row ) { throw new RuntimeException( 'The blocked dictionary row could not be read. Nothing was changed.' ); }
+        $source = (string) $row['source'];
+        $reasons = array();
+        if ( (int) $row['source_bytes'] > CTP_Client::MAX_BYTES ) { $reasons[] = 'Source exceeds the 12,000-byte request limit.'; }
+        if ( str_contains( $source, '<?' ) ) { $reasons[] = 'Contains a PHP/XML opening marker (<?).'; }
+        if ( preg_match( '~<(?:script|style)\b~i', $source ) ) { $reasons[] = 'Contains a script or style tag.'; }
+        if ( ! $reasons ) { $reasons[] = 'No blocker in the preview. The source may have changed, or a marker may occur after the first 6,000 characters.'; }
+        $key = CTP_Support::key();
+        if ( $key !== '' ) { $source = str_replace( $key, '[API KEY REDACTED]', $source ); }
+        $source = preg_replace( '/(?:sk-ant-|Bearer\s+)[A-Za-z0-9_.\-]+/i', '[CREDENTIAL REDACTED]', $source );
+        return array( 'row_id' => $id, 'language' => $language, 'kind' => $gettext ? 'gettext' : 'regular',
+            'source_bytes' => (int) $row['source_bytes'], 'preview_limit' => 6000, 'reason' => implode( ' ', $reasons ), 'source' => $source );
+    }
+
     public static function tick(): array {
         $lock = CTP_Support::lock( 'worker' );
         if ( ! $lock ) { return self::status(); }
