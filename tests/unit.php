@@ -54,6 +54,11 @@ foreach ( array( 'https://evil.test/', 'http://example.test/', 'https://example.
     check( ! CTP_Support::valid_url( $url ), 'unsafe crawl URL rejected' );
 }
 check( CTP_Support::valid_url( 'https://example.test/de/?p=42' ), 'same-site translated permalink accepted' );
+check( CTP_Support::usage() === array( 'day' => gmdate( 'Y-m-d' ), 'characters' => 0 ), 'missing usage option is normalized to zero' );
+update_option( 'ctp_usage', array( 'day' => '2000-01-01', 'characters' => 999 ) );
+check( CTP_Support::usage()['characters'] === 0, 'yesterday usage is zero today' );
+update_option( 'ctp_usage', false );
+check( CTP_Support::usage()['characters'] === 0, 'malformed usage option is handled' );
 update_option( 'ctp_settings', array( 'api_key' => 'TEST_NOT_A_REAL_KEY', 'daily_chars' => 10000 ) );
 $calls = 0; $mode = 'ok';
 $GLOBALS['http_mock'] = function ( $url, $args ) use ( &$calls, &$mode ) {

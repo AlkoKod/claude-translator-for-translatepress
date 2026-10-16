@@ -18,3 +18,4 @@ jobs:
       - run: find . -name '*.php' -print0 | xargs -0 -n1 php -l
       - run: php tests/unit.php
       - run: node --check assets/admin.js
+      - run: node tests/admin.test.cjs

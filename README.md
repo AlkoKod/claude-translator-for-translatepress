@@ -2,7 +2,11 @@
 
 A small, independent WordPress plugin that adds **Anthropic Claude (direct API)** to TranslatePress's native automatic translation providers, plus a resumable bulk translation runner.
 
-**0.2.0 is a preview release.** The local integration suite passes against WordPress 7.1.3, TranslatePress 3.3.8 and the Developer 1.8.8 add-on, on PHP 8.4.26 and MariaDB 11.4.5. Anthropic responses are mocked in automated tests; a live-key smoke test and staging verification are required before production use. No premium TranslatePress code is included in this repository.
+**0.2.1 is a preview release.** The local integration suite passes against WordPress 7.1.3, TranslatePress 3.3.8 and the Developer 1.8.8 add-on, on PHP 8.4.26 and MariaDB 11.4.5. Anthropic responses are mocked in automated tests; a live-key smoke test and staging verification are required before production use. No premium TranslatePress code is included in this repository.
+
+## First-run fix (0.2.1)
+
+Fixes jobs pausing immediately on a fresh install and undefined daily usage counters. After updating, resume the existing job. Missing scan authentication fails closed without visitor API spending. British English (en_GB) bulk discovery and persistence are covered by the local integration suite; English-source gettext is retained for English target locales.
 
 ## What it does
 
@@ -79,7 +83,7 @@ The plugin supplies an engine to TRP rather than rewriting Divi/Oxygen/Bricks/Gu
 | Divi, Oxygen Legacy, Bricks | Representative rendered-HTML fixtures pass; full builder plugins were not installed/tested |
 | Shared headers and footers | Collected when rendered on scanned public pages |
 | SEO metadata and URL slugs | Follows active TRP SEO Pack; slug persistence tested with Developer 1.8.8 |
-| Gettext strings | Discovered strings are processed through TRP's gettext queue; English source strings targeting en_US are left in their original English |
+| Gettext strings | Discovered strings are processed through TRP's gettext queue; English source strings targeting English locales are left in their original English |
 | AJAX-only content / unopened popup states | Not executed by the server-side scan; discover it in TRP first or provide a public URL rendering it |
 | Emails, private/logged-in pages | Outside bulk discovery scope |
 | Archives and pagination | Supply additional public URLs manually |
@@ -125,6 +129,7 @@ Deactivate to stop scheduled work. Deactivation does not erase TRP translations,
 php tests/unit.php
 find . -name '*.php' -print0 | xargs -0 -n1 php -l
 node --check assets/admin.js
+node tests/admin.test.cjs
 ```
 
 `tests/integration.php` runs via `wp eval-file` only when a disposable test site's `wp-config.php` defines `CTP_TEST_SITE=true`. It expects Czech as source, German and English configured with the extra-languages add-on, the Claude engine enabled, working TRP tables and a fixture page containing `Klidný pobyt`, `Pokoje s výhledem`, `Rezervujte nyní`, with slug `vitejte-v-hotelu`. API calls are intercepted in that CLI process. It exercises the actual TRP dictionary, bulk HTTP scan, gettext and SEO Pack persistence, repeated-run reuse and a human edit during an API call. Never run it on production.

@@ -9,6 +9,12 @@ final class CTP_Bulk {
 
     /** Only a signed, short-lived loopback request may bypass cache and collect strings. */
     public static function scan_request(): void {
+        // Even if a proxy strips authentication headers, discovery must never trigger visitor API billing.
+        if ( isset( $_GET['ctp_scan'] ) ) {
+            CTP_Support::$scan = true;
+            add_filter( 'trp_machine_translator_is_available', '__return_false', PHP_INT_MAX );
+            add_filter( 'trp_gettext_allow_machine_translation', '__return_false', PHP_INT_MAX );
+        }
         $stamp = (int) ( $_SERVER['HTTP_X_CTP_TIME'] ?? 0 );
         $signature = (string) ( $_SERVER['HTTP_X_CTP_SIGNATURE'] ?? '' );
         $uri = (string) ( $_SERVER['REQUEST_URI'] ?? '' );
@@ -84,7 +90,8 @@ final class CTP_Bulk {
                 'languages' => $languages, 'urls' => $urls, 'url_index' => 0, 'language_index' => 0,
                 'cursor' => 0, 'translated' => 0, 'skipped' => 0, 'error' => '', 'created' => time(), 'updated' => time() );
             update_option( 'ctp_job', $job, false );
-            update_option( 'ctp_paused', false, false );
+            // WordPress skips update_option(false) on a missing option. Explicit 0 persists on first install.
+            update_option( 'ctp_paused', 0, false );
             self::schedule();
             return self::status();
         } finally { CTP_Support::unlock( 'worker', $lock ); }
@@ -98,13 +105,13 @@ final class CTP_Bulk {
         unset( $out['urls'] );
         $out['url_count'] = count( $job['urls'] );
         $out['paused'] = (bool) get_option( 'ctp_paused', true );
-        $out['usage'] = get_option( 'ctp_usage', array() );
+        $out['usage'] = CTP_Support::usage();
         return $out;
     }
 
     public static function control( string $command ): array {
         if ( $command === 'pause' || $command === 'cancel' ) {
-            update_option( 'ctp_paused', true, false );
+            update_option( 'ctp_paused', 1, false );
             wp_clear_scheduled_hook( 'ctp_tick' );
         }
         $lock = CTP_Support::lock( 'worker' );
@@ -120,7 +127,7 @@ final class CTP_Bulk {
                 self::assert_ready();
                 if ( in_array( $job['phase'], array( 'done', 'cancelled' ), true ) ) { throw new RuntimeException( 'Start a new job instead.' ); }
                 $job['error'] = '';
-                update_option( 'ctp_paused', false, false );
+                update_option( 'ctp_paused', 0, false );
             }
             update_option( 'ctp_job', $job, false );
             self::schedule();
@@ -145,7 +152,7 @@ final class CTP_Bulk {
                 else { self::translate( $job ); }
             } catch ( Throwable $e ) {
                 $job['error'] = $e->getMessage();
-                update_option( 'ctp_paused', true, false );
+                update_option( 'ctp_paused', 1, false );
             }
             $job['updated'] = time();
             update_option( 'ctp_job', $job, false );
@@ -166,7 +173,7 @@ final class CTP_Bulk {
         if ( $job['url_index'] >= count( $job['urls'] ) ) { $job['url_index'] = 0; ++$job['language_index']; }
         if ( $job['language_index'] >= count( $job['languages'] ) ) {
             if ( $job['phase'] === 'finalize' ) {
-                $job['phase'] = 'done'; update_option( 'ctp_paused', true, false );
+                $job['phase'] = 'done'; update_option( 'ctp_paused', 1, false );
             } else {
                 $job['phase'] = 'translate'; $job['language_index'] = 0;
             }
@@ -272,7 +279,7 @@ final class CTP_Bulk {
                 throw new RuntimeException( 'Unsafe or oversized gettext source at row ' . (int) $row['id'] . '. Correct it before resuming.' );
             }
             $cursor = (int) $row['id'];
-            if ( trim( $text ) === '' || $language === 'en_US' ) { ++$job['skipped']; continue; }
+            if ( trim( $text ) === '' || preg_match( '/^en(?:_|$)/i', $language ) ) { ++$job['skipped']; continue; }
             $row['status'] = $query->get_constant_machine_translated();
             $row['translated'] = '';
             $queue[] = $row; $bytes += strlen( $text );

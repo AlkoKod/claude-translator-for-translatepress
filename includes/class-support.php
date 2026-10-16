@@ -28,6 +28,12 @@ final class CTP_Support {
         return self::$error;
     }
 
+    public static function usage(): array {
+        $day = gmdate( 'Y-m-d' );
+        $usage = get_option( 'ctp_usage', array() );
+        return array( 'day' => $day, 'characters' => is_array( $usage ) && ( $usage['day'] ?? '' ) === $day ? max( 0, (int) ( $usage['characters'] ?? 0 ) ) : 0 );
+    }
+
     /** Atomic option lock with compare-and-delete recovery; never deletes another owner's lock. */
     public static function lock( string $name, int $ttl = 180 ): ?string {
         global $wpdb;
@@ -56,11 +62,7 @@ final class CTP_Support {
             return false;
         }
         try {
-            $day = gmdate( 'Y-m-d' );
-            $usage = get_option( 'ctp_usage', array() );
-            if ( ( $usage['day'] ?? '' ) !== $day ) {
-                $usage = array( 'day' => $day, 'characters' => 0 );
-            }
+            $usage = self::usage();
             if ( $usage['characters'] + $characters > (int) self::config()['daily_chars'] ) {
                 self::fail( 'daily_limit', 'Daily character limit reached. Raise the limit or resume after midnight UTC.' );
                 return false;

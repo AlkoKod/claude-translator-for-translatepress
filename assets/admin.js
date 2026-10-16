@@ -23,7 +23,7 @@
       lang ? `Language: ${lang}` : '',
       ['discover', 'finalize'].includes(job.phase) ? `Page: ${job.url_index + 1} / ${job.url_count}` : '',
       `Strings processed: ${job.translated || 0} · skipped: ${job.skipped || 0}`,
-      job.usage ? `Reserved source bytes today (${job.usage.day} UTC): ${job.usage.characters}` : '',
+      `Reserved source bytes today (${job.usage?.day || new Date().toISOString().slice(0, 10)} UTC): ${Number.isFinite(Number(job.usage?.characters)) ? Number(job.usage.characters) : 0}`,
       job.error ? `Attention: ${job.error}` : '',
       job.phase === 'done' ? 'Run finished. Clear affected translated-page caches and review translations in TRP.' : '',
     ].filter(Boolean).join('\n');

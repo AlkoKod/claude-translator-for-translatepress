@@ -25,12 +25,13 @@ add_filter( 'pre_http_request', static function ( $pre, $args, $url ) use ( &$ca
 }, 10, 3 );
 $trp = TRP_Translate_Press::get_trp_instance();
 $query = $trp->get_component( 'query' );
+$target_english = in_array( 'en_GB', CTP_Support::trp_settings()['translation-languages'], true ) ? 'en_GB' : 'en_US';
 $renderer = $trp->get_component( 'translation_render' );
 $engine = $trp->get_component( 'machine_translator' );
 $check( CTP_Support::config()['model'] === 'claude-sonnet-5-5', 'new default or upgraded saved model is Sonnet 5.5' );
 $check( $engine instanceof CTP_Engine, 'TRP instantiates Claude from its native provider registry' );
 $check( ! $engine->is_available(), 'visitor-triggered API calls are disabled by default' );
-foreach ( array( 'de_DE', 'en_US' ) as $language ) { $query->check_table( 'cs_CZ', $language ); }
+foreach ( array( 'de_DE', $target_english ) as $language ) { $query->check_table( 'cs_CZ', $language ); }
 $id = wp_generate_uuid4();
 $strings = array( 'CTP ' . $id . ' Vítejte <b>v hotelu</b>', 'CTP ' . $id . ' Cena %s za pokoj' );
 CTP_Support::$bulk = true;
@@ -53,8 +54,14 @@ $race_saved = $query->get_existing_translations( array( $race ), 'de_DE' );
 $check( $race_saved[$race]->translated === 'Human reviewed during API call', 'human edit made during API request is preserved' );
 CTP_Support::$bulk = false;
 // Full discovery -> regular -> gettext -> finalization against a real local HTTP server and MySQL.
-delete_option( 'ctp_job' ); update_option( 'ctp_paused', true );
-CTP_Bulk::create( array( 'de_DE', 'en_US' ), '' );
+delete_option( 'ctp_job' ); delete_option( 'ctp_paused' ); delete_option( 'ctp_usage' );
+CTP_Bulk::create( array( $target_english, 'de_DE' ), '' );
+$check( CTP_Bulk::status()['paused'] === false, 'fresh installation persists running state without a pre-existing pause option' );
+$check( CTP_Bulk::status()['usage'] === array( 'day' => gmdate( 'Y-m-d' ), 'characters' => 0 ), 'discovery reports zero usage before its first API call' );
+CTP_Bulk::control( 'pause' );
+$check( CTP_Bulk::status()['paused'] === true, 'explicit pause state persists' );
+CTP_Bulk::control( 'resume' );
+$check( CTP_Bulk::status()['paused'] === false, 'resume clears pause state' );
 for ( $i = 0; $i < 300; ++$i ) {
     unset( $GLOBALS['trp_machine_translation_deadline'] );
     $state = CTP_Bulk::tick();
@@ -70,11 +77,11 @@ foreach ( array( 'Klidný pobyt', 'Pokoje s výhledem', 'Rezervujte nyní' ) as 
 if ( function_exists( 'trp_in_sp_create_db_tables' ) ) {
     global $wpdb;
     $slug_languages = $wpdb->get_col( $wpdb->prepare( "SELECT t.language FROM {$wpdb->prefix}trp_slug_originals o JOIN {$wpdb->prefix}trp_slug_translations t ON t.original_id=o.id WHERE o.original=%s AND t.translated<>''", 'vitejte-v-hotelu' ) );
-    $check( in_array( 'de_DE', $slug_languages, true ) && in_array( 'en_US', $slug_languages, true ), 'SEO Pack persists slugs for both target languages' );
+    $check( in_array( 'de_DE', $slug_languages, true ) && in_array( $target_english, $slug_languages, true ), 'SEO Pack persists slugs for both target languages' );
 }
 $before = $calls;
 delete_option( 'ctp_job' ); update_option( 'ctp_paused', true );
-CTP_Bulk::create( array( 'de_DE', 'en_US' ), '' );
+CTP_Bulk::create( array( $target_english, 'de_DE' ), '' );
 for ( $i = 0; $i < 300; ++$i ) {
     unset( $GLOBALS['trp_machine_translation_deadline'] );
     $state = CTP_Bulk::tick();
@@ -82,4 +89,7 @@ for ( $i = 0; $i < 300; ++$i ) {
     if ( $state['phase'] === 'done' ) { break; }
 }
 $check( $state['phase'] === 'done' && $calls === $before, 'second full run uses persisted translations without API calls' );
+$_GET['ctp_scan'] = 'invalid-signature-test';
+CTP_Bulk::scan_request(); CTP_Support::$bulk = true;
+$check( CTP_Support::$scan && ! $engine->is_available(), 'unsigned discovery requests fail closed without enabling API translation' );
 WP_CLI::success( "{$checks} real TRP/WordPress integration assertions; API mocked, no API spend." );
