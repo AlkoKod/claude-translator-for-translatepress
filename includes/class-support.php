@@ -1,0 +1,94 @@
+<?php
+defined( 'ABSPATH' ) || exit;
+
+final class CTP_Support {
+    public static bool $bulk = false;
+    public static bool $scan = false;
+    public static ?WP_Error $error = null;
+    public static ?string $write_language = null;
+    public static array $write_originals = array();
+
+    public static function config(): array {
+        return wp_parse_args( get_option( 'ctp_settings', array() ), array(
+            'model' => 'claude-sonnet-4-6', 'context' => '', 'daily_chars' => 100000,
+            'visitor_translation' => false, 'api_key' => '',
+        ) );
+    }
+
+    public static function key(): string {
+        return defined( 'CTP_ANTHROPIC_API_KEY' ) ? (string) CTP_ANTHROPIC_API_KEY : (string) self::config()['api_key'];
+    }
+
+    public static function trp_settings(): array {
+        return TRP_Translate_Press::get_trp_instance()->get_component( 'settings' )->get_settings();
+    }
+
+    public static function fail( string $code, string $message ): WP_Error {
+        self::$error = new WP_Error( $code, $message );
+        return self::$error;
+    }
+
+    /** Atomic option lock with compare-and-delete recovery; never deletes another owner's lock. */
+    public static function lock( string $name, int $ttl = 180 ): ?string {
+        global $wpdb;
+        $key = 'ctp_lock_' . $name;
+        $old = get_option( $key );
+        if ( is_string( $old ) && (int) explode( ':', $old )[0] < time() ) {
+            $wpdb->query( $wpdb->prepare( "DELETE FROM {$wpdb->options} WHERE option_name = %s AND option_value = %s", $key, $old ) );
+            wp_cache_delete( $key, 'options' );
+        }
+        $token = ( time() + $ttl ) . ':' . wp_generate_uuid4();
+        return add_option( $key, $token, '', false ) ? $token : null;
+    }
+
+    public static function unlock( string $name, string $token ): void {
+        global $wpdb;
+        $key = 'ctp_lock_' . $name;
+        $wpdb->query( $wpdb->prepare( "DELETE FROM {$wpdb->options} WHERE option_name = %s AND option_value = %s", $key, $token ) );
+        wp_cache_delete( $key, 'options' );
+    }
+
+    /** Reserve before sending. Failed/uncertain calls remain charged to this local safety limit. */
+    public static function reserve( int $characters ): bool {
+        $lock = self::lock( 'budget', 10 );
+        if ( ! $lock ) {
+            self::fail( 'budget_busy', 'Usage counter is busy. Retry this batch.' );
+            return false;
+        }
+        try {
+            $day = gmdate( 'Y-m-d' );
+            $usage = get_option( 'ctp_usage', array() );
+            if ( ( $usage['day'] ?? '' ) !== $day ) {
+                $usage = array( 'day' => $day, 'characters' => 0 );
+            }
+            if ( $usage['characters'] + $characters > (int) self::config()['daily_chars'] ) {
+                self::fail( 'daily_limit', 'Daily character limit reached. Raise the limit or resume after midnight UTC.' );
+                return false;
+            }
+            $usage['characters'] += $characters;
+            update_option( 'ctp_usage', $usage, false );
+            return true;
+        } finally {
+            self::unlock( 'budget', $lock );
+        }
+    }
+
+    public static function valid_url( string $url ): bool {
+        $home = wp_parse_url( home_url( '/' ) );
+        $parts = wp_parse_url( $url );
+        if ( ! is_array( $parts ) || ! in_array( $parts['scheme'] ?? '', array( 'http', 'https' ), true ) ||
+            strtolower( $parts['host'] ?? '' ) !== strtolower( $home['host'] ?? '' ) ||
+            ( $parts['port'] ?? null ) !== ( $home['port'] ?? null ) ||
+            ( $parts['scheme'] ?? '' ) !== ( $home['scheme'] ?? '' ) || isset( $parts['user'] ) || isset( $parts['pass'] ) ) {
+            return false;
+        }
+        $path = rawurldecode( $parts['path'] ?? '/' );
+        $home_path = trailingslashit( $home['path'] ?? '/' );
+        if ( ! str_starts_with( trailingslashit( $path ), $home_path ) ||
+            preg_match( '~(?:^|/)(?:wp-admin|wp-json|wp-login\.php|wp-cron\.php|xmlrpc\.php|\.\.?)(?:/|$)~i', $path ) ) {
+            return false;
+        }
+        parse_str( $parts['query'] ?? '', $query );
+        return ! array_intersect( array_keys( $query ), array( 'rest_route', 'preview', 'action', 'add-to-cart', 'wc-ajax', 'ctp_scan' ) );
+    }
+}

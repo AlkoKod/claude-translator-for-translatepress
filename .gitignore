@@ -1,0 +1,9 @@
+*.zip
+*.log
+.env
+.env.*
+wp-config.php
+/vendor/
+/node_modules/
+.DS_Store
+Thumbs.db
