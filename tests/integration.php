@@ -21,12 +21,13 @@ add_filter( 'pre_http_request', static function ( $pre, $args, $url ) use ( &$ca
         $race_original = null;
     }
     $rows = array_map( static fn( $s ) => array( 'id' => $s['id'], 'text' => 'Translated ' . $s['text'] ), $strings );
-    return array( 'response' => array( 'code' => 200 ), 'body' => wp_json_encode( array( 'stop_reason' => 'tool_use', 'content' => array( array( 'type' => 'tool_use', 'name' => 'submit_translations', 'input' => array( 'translations' => $rows ) ) ) ) ), 'headers' => array() );
+    return array( 'response' => array( 'code' => 200 ), 'body' => wp_json_encode( array( 'stop_reason' => 'end_turn', 'content' => array( array( 'type' => 'text', 'text' => wp_json_encode( array( 'translations' => $rows ) ) ) ) ) ), 'headers' => array() );
 }, 10, 3 );
 $trp = TRP_Translate_Press::get_trp_instance();
 $query = $trp->get_component( 'query' );
 $renderer = $trp->get_component( 'translation_render' );
 $engine = $trp->get_component( 'machine_translator' );
+$check( CTP_Support::config()['model'] === 'claude-sonnet-5-5', 'new default or upgraded saved model is Sonnet 5.5' );
 $check( $engine instanceof CTP_Engine, 'TRP instantiates Claude from its native provider registry' );
 $check( ! $engine->is_available(), 'visitor-triggered API calls are disabled by default' );
 foreach ( array( 'de_DE', 'en_US' ) as $language ) { $query->check_table( 'cs_CZ', $language ); }

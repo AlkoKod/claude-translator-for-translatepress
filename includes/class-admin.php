@@ -83,7 +83,7 @@ final class CTP_Admin {
         $settings = class_exists( 'TRP_Translate_Press' ) ? CTP_Support::trp_settings() : array();
         ?>
         <div class="wrap ctp-wrap">
-            <h1>Claude Translate <span class="ctp-version">0.1.0 · preview</span></h1>
+            <h1>Claude Translate <span class="ctp-version"><?php echo esc_html( CTP_VERSION ); ?> · preview</span></h1>
             <p>Direct Anthropic API. Translations are stored and edited in TranslatePress. No separate translation service.</p>
             <?php if ( ! empty( $_GET['saved'] ) ) : ?><div class="notice notice-success"><p>Settings saved.</p></div><?php endif; ?>
             <section class="ctp-card">
@@ -97,7 +97,7 @@ final class CTP_Admin {
                             <p class="description">Never displayed again. Alternatively define CTP_ANTHROPIC_API_KEY in wp-config.php. API usage is billed by Anthropic.</p>
                             <?php if ( ! defined( 'CTP_ANTHROPIC_API_KEY' ) ) : ?><label><input type="checkbox" name="clear_key" value="1"> Remove stored key</label><?php endif; ?>
                         </td></tr>
-                        <tr><th><label for="ctp-model">Model ID</label></th><td><input id="ctp-model" name="model" value="<?php echo esc_attr( $config['model'] ); ?>" class="regular-text" required><p class="description">Use a model available to your Anthropic account that supports tool use.</p></td></tr>
+                        <tr><th><label for="ctp-model">Model ID</label></th><td><input id="ctp-model" name="model" value="<?php echo esc_attr( $config['model'] ); ?>" class="regular-text" required><p class="description">Default: claude-sonnet-5-5. Use a model available to your Anthropic account that supports structured JSON output.</p></td></tr>
                         <tr><th><label for="ctp-context">Site context / terminology</label></th><td><textarea id="ctp-context" name="context" rows="4" class="large-text" maxlength="6000"><?php echo esc_textarea( $config['context'] ); ?></textarea><p class="description">For example: hospitality website, formal German Sie, preserve the brand name.</p></td></tr>
                         <tr><th><label for="ctp-limit">Daily source limit</label></th><td><input type="number" id="ctp-limit" name="daily_chars" value="<?php echo (int) $config['daily_chars']; ?>" min="1000" max="100000000"><p class="description">UTF-8 source bytes, resetting at midnight UTC. Conservative usage cap, not a currency budget. Failed API attempts count too.</p></td></tr>
                         <tr><th>Visitor-triggered translation</th><td><label><input type="checkbox" name="visitor_translation" value="1" <?php checked( $config['visitor_translation'] ); ?>> Translate new strings when visitors open uncached pages</label><p class="description">Off by default. Saved translations are always served by TRP without calling Claude. Use bulk mode to prepare translations first.</p></td></tr>

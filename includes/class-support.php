@@ -10,7 +10,7 @@ final class CTP_Support {
 
     public static function config(): array {
         return wp_parse_args( get_option( 'ctp_settings', array() ), array(
-            'model' => 'claude-sonnet-4-6', 'context' => '', 'daily_chars' => 100000,
+            'model' => 'claude-sonnet-5-5', 'context' => '', 'daily_chars' => 100000,
             'visitor_translation' => false, 'api_key' => '',
         ) );
     }

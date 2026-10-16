@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Claude Translator for TranslatePress
  * Description: Direct Anthropic Claude translation engine and resumable whole-site translation for TranslatePress.
- * Version: 0.1.0
+ * Version: 0.2.0
  * Requires at least: 6.5
  * Requires PHP: 8.1
  * Requires Plugins: translatepress-multilingual
@@ -10,7 +10,7 @@
  * Text Domain: claude-translator-for-translatepress
  */
 defined( 'ABSPATH' ) || exit;
-define( 'CTP_VERSION', '0.1.0' );
+define( 'CTP_VERSION', '0.2.0' );
 define( 'CTP_FILE', __FILE__ );
 define( 'CTP_DIR', __DIR__ . '/' );
 require_once CTP_DIR . 'includes/class-support.php';
@@ -33,6 +33,16 @@ add_filter( 'trp_automatic_translation_engines_classes', static function ( $clas
 } );
 CTP_Bulk::register();
 CTP_Admin::register();
+add_action( 'plugins_loaded', static function () {
+    if ( get_option( 'ctp_version' ) === CTP_VERSION ) { return; }
+    $config = get_option( 'ctp_settings', array() );
+    // Upgrade the old default; retain any other explicitly configured model and all secrets/settings.
+    if ( ( $config['model'] ?? '' ) === 'claude-sonnet-4-6' ) {
+        $config['model'] = 'claude-sonnet-5-5';
+        update_option( 'ctp_settings', $config, false );
+    }
+    update_option( 'ctp_version', CTP_VERSION, false );
+}, -1001 );
 // If an editor reviewed a string while Claude was working, leave that native TRP save alone.
 add_filter( 'trp_allow_string_saving', static function ( $allow, $new, $updates ) {
     if ( ! $allow || ! CTP_Support::$write_language || ! $updates ) { return $allow; }

@@ -3,7 +3,7 @@ Tags: translatepress, claude, translation, anthropic, multilingual
 Requires at least: 6.5
 Tested up to: 7.1.3
 Requires PHP: 8.1
-Stable tag: 0.1.0
+Stable tag: 0.2.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -51,5 +51,8 @@ It uses TRP's rendered HTML extraction. Gutenberg rendering and representative D
 
 == Changelog ==
 
+= 0.2.0 =
+Default to Sonnet 5.5. Replace forced tools with structured JSON outputs. Use Sonnet 5.5 between_tools thinking mode and low effort. Retain strict ID, placeholder and HTML validation; upgrade the old default model without deleting keys, settings or saved TRP translations.
+
 = 0.1.0 =
-Initial preview: native Claude provider, protected placeholders, validated tool responses, TRP dictionary reuse, bulk/gettext/SEO finalization, usage cap, admin UI and WP-CLI.
+Initial preview: native Claude provider, protected placeholders, validated structured JSON responses, TRP dictionary reuse, bulk/gettext/SEO finalization, usage cap, admin UI and WP-CLI.

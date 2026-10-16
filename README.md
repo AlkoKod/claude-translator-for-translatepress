@@ -2,9 +2,15 @@
 
 A small, independent WordPress plugin that adds **Anthropic Claude (direct API)** to TranslatePress's native automatic translation providers, plus a resumable bulk translation runner.
 
-**0.1.0 is a preview release.** The local integration suite passes against WordPress 7.1.3, TranslatePress 3.3.8 and the Developer 1.8.8 add-on, on PHP 8.4.26 and MariaDB 11.4.5. Anthropic responses are mocked in automated tests; a live-key smoke test and staging verification are required before production use. No premium TranslatePress code is included in this repository.
+**0.2.0 is a preview release.** The local integration suite passes against WordPress 7.1.3, TranslatePress 3.3.8 and the Developer 1.8.8 add-on, on PHP 8.4.26 and MariaDB 11.4.5. Anthropic responses are mocked in automated tests; a live-key smoke test and staging verification are required before production use. No premium TranslatePress code is included in this repository.
 
 ## What it does
+
+### Sonnet 5.5 support (0.2.0)
+
+The default model is `claude-sonnet-5-5`. Responses use `output_config.format` with a JSON schema; no tools or forced tool choices are sent. For Sonnet 5.5, `thinking.type=between_tools` and low effort avoid up-front reasoning on translation requests. See [Anthropic's Sonnet 5.5 migration notes](https://platform.claude.com/docs/en/models/sonnet-5-5/whats-new-sonnet-5-5) and [structured outputs](https://platform.claude.com/docs/en/build-with-claude/structured-outputs).
+
+On upgrade, the former default `claude-sonnet-4-6` is migrated to `claude-sonnet-5-5`; other custom model IDs, the key, context and existing TRP translations are retained. Model/instruction changes select a fresh provider-cache scope but do not retranslate existing TRP dictionary entries.
 
 - Connects directly to `https://api.anthropic.com/v1/messages`, using your Anthropic API key. No OpenRouter or intermediary account.
 - Registers Claude in **TranslatePress → Automatic Translation**.
@@ -20,7 +26,7 @@ A small, independent WordPress plugin that adds **Anthropic Claude (direct API)*
 
 - WordPress 6.5+, PHP 8.1+ (tested locally on PHP 8.4).
 - TranslatePress **3.3.8** is the tested integration version. Retest when upgrading: the bulk runner uses TRP's internal renderer and a narrow adapter to its protected gettext queue.
-- Anthropic API access and billing, with a tool-capable Claude model available to your account. Model ID is configurable.
+- Anthropic API access and billing, with a structured-output-capable Claude model available to your account. Model ID is configurable.
 - HTTPS outbound access to Anthropic; working same-origin HTTP(S) loopback access for bulk discovery.
 - Your normal TranslatePress license/add-ons for extra languages and SEO features. This plugin does not unlock paid TRP features or replace their license.
 

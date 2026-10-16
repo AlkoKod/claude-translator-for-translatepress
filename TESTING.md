@@ -1,4 +1,4 @@
-# Verification record — 0.1.0 preview
+# Verification record — 0.2.0 preview
 
 Date: 2026-10-16.
 
@@ -12,8 +12,8 @@ Date: 2026-10-16.
 ## Passed
 
 - PHP lint for all runtime and test PHP files; `node --check assets/admin.js`.
-- `php tests/unit.php`: **42 assertions**. HTML/attributes/shortcode/printf/TRP placeholder round-trips; missing/duplicated/reordered placeholders; injected HTML; malformed/truncated/duplicate-ID responses; HTTP 429/transport errors; upstream diagnostic redaction; exact same-origin crawl restrictions; daily cap before HTTP; lock ownership and exclusion.
-- `wp eval-file tests/integration.php`: **15 assertions**, running against real WordPress/TRP tables and real local HTTP page rendering with only the Anthropic response mocked. Checks provider registry, default visitor-call suppression, native dictionary persistence, repeated-render reuse, failed-response non-persistence, human edit during an API call, full bulk lifecycle, rendered Divi/Oxygen/Bricks-shaped fixture text, SEO slug persistence for both DE/EN, and **zero further API calls on a second complete bulk run**.
+- `php tests/unit.php`: **113 assertions**. HTML/attributes/shortcode/printf/TRP placeholder round-trips; missing/duplicated/reordered placeholders; injected HTML; malformed/truncated/duplicate-ID responses; HTTP 429/transport errors; upstream diagnostic redaction; exact same-origin crawl restrictions; daily cap before HTTP; lock ownership and exclusion. Sonnet 5.5 checks verify structured JSON, no forced tools, between_tools thinking, low effort, refusal handling, unexpected response blocks/fields, malformed JSON and reasoning-block separation.
+- `wp eval-file tests/integration.php`: **16 assertions**, running against real WordPress/TRP tables and real local HTTP page rendering with only the Anthropic response mocked. Checks upgraded Sonnet 5.5 model, provider registry, default visitor-call suppression, native dictionary persistence, repeated-render reuse, failed-response non-persistence, human edit during an API call, full bulk lifecycle, rendered Divi/Oxygen/Bricks-shaped fixture text, SEO slug persistence for both DE/EN, and **zero further API calls on a second complete bulk run**.
 - Unauthenticated `ctp_admin` job-control request returns HTTP 400 with WordPress `0`; there is no public AJAX handler.
 - Browser: local WordPress login, plugin settings page, native TRP Automatic Translation page, **Anthropic Claude (direct API)** selected in the provider dropdown.
 

@@ -60,6 +60,10 @@ $GLOBALS['http_mock'] = function ( $url, $args ) use ( &$calls, &$mode ) {
     ++$calls;
     check( $url === CTP_Client::ENDPOINT && $args['redirection'] === 0 && $args['sslverify'], 'fixed endpoint and TLS; no credential redirects' );
     $body = json_decode( $args['body'], true );
+    check( $body['model'] === 'claude-sonnet-5-5', 'Sonnet 5.5 is the default model' );
+    check( ! isset( $body['tools'] ) && ! isset( $body['tool_choice'] ), 'no forced tool choice for Sonnet 5.5' );
+    check( ( $body['output_config']['format']['type'] ?? '' ) === 'json_schema', 'structured JSON response schema sent' );
+    check( $body['thinking'] === array( 'type' => 'between_tools' ) && $body['output_config']['effort'] === 'low', 'documented Sonnet 5.5 thinking mode and low effort' );
     $strings = json_decode( $body['messages'][0]['content'], true )['strings'];
     check( ! str_contains( $body['messages'][0]['content'], 'TEST_NOT_A_REAL_KEY' ), 'API key excluded from prompt' );
     if ( $mode === '429' ) { return array( 'response' => array( 'code' => 429 ), 'body' => 'SECRET_UPSTREAM_TEXT' ); }
@@ -67,16 +71,23 @@ $GLOBALS['http_mock'] = function ( $url, $args ) use ( &$calls, &$mode ) {
     $translations = array_map( static fn( $s ) => array( 'id' => $s['id'], 'text' => str_replace( 'Vítejte', 'Willkommen', $s['text'] ) ), $strings );
     if ( $mode === 'duplicate' ) { $translations[1]['id'] = $translations[0]['id']; }
     if ( $mode === 'html' ) { $translations[0]['text'] .= '<img src=x onerror=alert(1)>'; }
-    $content = array( array( 'type' => 'tool_use', 'name' => 'submit_translations', 'input' => array( 'translations' => array_reverse( $translations ) ) ) );
-    return array( 'response' => array( 'code' => 200 ), 'body' => json_encode( array( 'content' => $content, 'stop_reason' => $mode === 'truncated' ? 'max_tokens' : 'tool_use' ) ) );
+    if ( $mode === 'extra_field' ) { $translations[0]['unexpected'] = 'bad'; }
+    $text = $mode === 'bad_json' ? '{invalid' : json_encode( array( 'translations' => array_reverse( $translations ) ) );
+    $content = array( array( 'type' => 'text', 'text' => $text ) );
+    if ( $mode === 'two_texts' ) { $content[] = $content[0]; }
+    if ( $mode === 'tool_response' ) { $content[] = array( 'type' => 'tool_use', 'name' => 'unexpected' ); }
+    if ( $mode === 'thinking' ) { array_unshift( $content, array( 'type' => 'thinking', 'thinking' => 'ignored private reasoning' ) ); }
+    return array( 'response' => array( 'code' => 200 ), 'body' => json_encode( array( 'content' => $content, 'stop_reason' => $mode === 'truncated' ? 'max_tokens' : ( $mode === 'refusal' ? 'refusal' : 'end_turn' ) ) ) );
 };
 $client = new CTP_Client();
 $out = $client->translate( array( 8 => 'Vítejte', 19 => '<b>Vítejte</b>' ), 'cs_CZ', 'de_DE' );
 check( $out[8] === 'Willkommen' && $out[19] === '<b>Willkommen</b>', 'IDs preserve non-sequential TRP keys despite reversed output' );
-foreach ( array( 'duplicate', 'html', 'truncated', '429', 'network' ) as $mode ) {
+foreach ( array( 'duplicate', 'html', 'truncated', '429', 'network', 'bad_json', 'extra_field', 'two_texts', 'tool_response', 'refusal' ) as $mode ) {
     check( $client->translate( array( 'Vítejte', 'Vítejte znovu' ), 'cs_CZ', 'de_DE' ) === array(), 'bad response rejected atomically: ' . $mode );
     check( ! str_contains( CTP_Support::$error->get_error_message(), 'SECRET' ), 'upstream body never leaked' );
 }
+$mode = 'thinking';
+check( $client->translate( array( 'Vítejte' ), 'cs_CZ', 'de_DE' ) === array( 'Willkommen' ), 'JSON text parsed independently of thinking blocks' );
 $before = $calls;
 check( $client->translate( array( '<? //silence' ), 'cs_CZ', 'de_DE' ) === array() && $calls === $before, 'broken PHP source rejected before billing' );
 update_option( 'ctp_settings', array( 'api_key' => 'TEST_NOT_A_REAL_KEY', 'daily_chars' => 1 ) );
