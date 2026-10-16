@@ -2,7 +2,11 @@
 
 A small, independent WordPress plugin that adds **Anthropic Claude (direct API)** to TranslatePress's native automatic translation providers, plus a resumable bulk translation runner.
 
-**0.2.2 is a preview release.** The local integration suite passes against WordPress 7.1.3, TranslatePress 3.3.8 and the Developer 1.8.8 add-on, on PHP 8.4.26 and MariaDB 11.4.5. Anthropic responses are mocked in automated tests; a live-key smoke test and staging verification are required before production use. No premium TranslatePress code is included in this repository.
+**0.2.3 is a preview release.** The local integration suite passes against WordPress 7.1.3, TranslatePress 3.3.8 and the Developer 1.8.8 add-on, on PHP 8.4.26 and MariaDB 11.4.5. Anthropic responses are mocked in automated tests; a live-key smoke test and staging verification are required before production use. No premium TranslatePress code is included in this repository.
+
+## Restricted response diagnostics (0.2.3)
+
+Admin tests and bulk job errors now include the API error type, request ID and a bounded error message. Known complete input strings, the configured key and recognizable credentials are redacted. Error messages can still contain partial input excerpts: review them before sharing. The sanitized diagnostic is retained with the private job status, never sent to a public page or written to a separate log. HTML/non-JSON error bodies are never displayed; their format and byte length help identify a proxy rejection. No paid retry or model fallback runs automatically.
 
 ## API diagnostics (0.2.2)
 

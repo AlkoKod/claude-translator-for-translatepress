@@ -61,7 +61,12 @@ final class CTP_Client {
         }
         $code = wp_remote_retrieve_response_code( $response );
         if ( $code !== 200 ) {
-            CTP_Support::fail( 'http_' . $code, self::http_error( $code, wp_remote_retrieve_body( $response ) ) );
+            $diagnostic = self::http_error( $code, wp_remote_retrieve_body( $response ) );
+            if ( CTP_Support::$bulk || current_user_can( 'manage_options' ) ) {
+                $private = array_merge( array_values( $strings ), array_column( $items, 'text' ), array( CTP_Support::key(), $config['context'], $request['system'], $request['messages'][0]['content'] ) );
+                $diagnostic .= self::response_diagnostic( $response, $private );
+            }
+            CTP_Support::fail( 'http_' . $code, $diagnostic );
             return array();
         }
         $body = json_decode( wp_remote_retrieve_body( $response ), true );
@@ -129,5 +134,31 @@ final class CTP_Client {
             }
         }
         return 'Anthropic returned HTTP ' . $code . '. ' . $reason;
+    }
+
+    /** Restricted to job/admin diagnostics by the caller. Never include raw HTML, headers or request payloads. */
+    public static function response_diagnostic( array $response, array $private ): string {
+        $body = wp_remote_retrieve_body( $response );
+        $data = json_decode( $body, true );
+        $error = is_array( $data ) && is_array( $data['error'] ?? null ) ? $data['error'] : array();
+        $message = is_string( $error['message'] ?? null ) ? $error['message'] : '';
+        // Remove complete known secrets and input strings before bounding output; include escaped JSON variants.
+        usort( $private, static fn( $a, $b ) => strlen( $b ) <=> strlen( $a ) );
+        foreach ( $private as $value ) {
+            if ( $value === '' ) { continue; }
+            foreach ( array_unique( array( $value, substr( (string) wp_json_encode( $value ), 1, -1 ) ) ) as $variant ) {
+                if ( strlen( $variant ) >= 4 ) { $message = str_replace( $variant, '[redacted]', $message ); }
+                else { $message = str_replace( array( '"' . $variant . '"', "'" . $variant . "'" ), '[redacted]', $message ); }
+            }
+        }
+        $message = preg_replace( '/(?:sk-ant-|Bearer\s+)[A-Za-z0-9_.\-]+/i', '[redacted]', $message );
+        $message = mb_substr( preg_replace( '/[\x00-\x1f\x7f]/', ' ', strip_tags( $message ) ), 0, 1500 );
+        $type = $error['type'] ?? '';
+        $type = is_string( $type ) && preg_match( '/^[a-z_]{1,50}$/D', $type ) ? $type : 'unrecognized';
+        $id = wp_remote_retrieve_header( $response, 'request-id' );
+        if ( ! is_string( $id ) || ! preg_match( '/^req_[A-Za-z0-9]{8,80}$/D', $id ) ) { $id = is_array( $data ) ? ( $data['request_id'] ?? '' ) : ''; }
+        $id = is_string( $id ) && preg_match( '/^req_[A-Za-z0-9]{8,80}$/D', $id ) ? $id : 'absent';
+        $format = $message !== '' ? 'JSON error' : ( is_array( $data ) ? 'JSON without error.message' : ( str_starts_with( ltrim( $body ), '<' ) ? 'HTML/XML response' : 'non-JSON response' ) );
+        return ' Diagnostic: ' . $format . '; type=' . $type . '; request-id=' . $id . '; bytes=' . strlen( $body ) . ( $message !== '' ? '; detail=' . $message : '. No raw response body is displayed.' );
     }
 }

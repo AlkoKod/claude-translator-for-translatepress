@@ -19,6 +19,8 @@ function trailingslashit( $value ) { return rtrim( $value, '/' ) . '/'; }
 function is_wp_error( $value ) { return $value instanceof WP_Error; }
 function wp_remote_retrieve_response_code( $value ) { return $value['response']['code']; }
 function wp_remote_retrieve_body( $value ) { return $value['body']; }
+function wp_remote_retrieve_header( $value, $name ) { return $value['headers'][$name] ?? ''; }
+function current_user_can( $capability ) { return false; }
 function wp_remote_post( $url, $args ) { return ( $GLOBALS['http_mock'] )( $url, $args ); }
 $GLOBALS['wpdb'] = new class {
     public string $options = 'wp_options';
@@ -104,6 +106,21 @@ foreach ( array(
 }
 check( str_contains( CTP_Client::http_error( 400, '<html>SECRET_PROXY_BODY</html>' ), 'does not match a recognized safe diagnostic' ), 'non-JSON upstream body handled safely' );
 check( str_contains( CTP_Client::http_error( 400, '{"error":{"message":[]}}' ), 'does not match a recognized safe diagnostic' ), 'malformed upstream error handled safely' );
+$diagnostic_response = array( 'response' => array( 'code' => 400 ), 'headers' => array( 'request-id' => 'req_0123456789abcdef' ), 'body' => json_encode( array( 'error' => array( 'type' => 'invalid_request_error', 'message' => 'Unrecognized parameter: example_setting. TEST_NOT_A_REAL_KEY sk-ant-secret123 Bearer abc123 Private hotel input <script>bad</script>' ) ) ) );
+$diagnostic = CTP_Client::response_diagnostic( $diagnostic_response, array( 'TEST_NOT_A_REAL_KEY', 'Private hotel input' ) );
+check( str_contains( $diagnostic, 'example_setting' ), 'unclassified API rejection retains actionable parameter detail' );
+check( ! str_contains( $diagnostic, 'TEST_NOT_A_REAL_KEY' ) && ! str_contains( $diagnostic, 'sk-ant-secret123' ) && ! str_contains( $diagnostic, 'abc123' ), 'diagnostics redact current and recognizable credentials' );
+check( ! str_contains( $diagnostic, 'Private hotel input' ) && ! str_contains( $diagnostic, '<script>' ), 'diagnostics redact complete known source and remove markup' );
+check( str_contains( $diagnostic, 'request-id=req_0123456789abcdef' ), 'Anthropic request identifier retained' );
+check( str_contains( $diagnostic, 'type=invalid_request_error' ), 'API error type retained' );
+$diagnostic_response['body'] = '<html>SECRET_PROXY_PAGE</html>';
+$diagnostic_response['headers'] = array();
+$diagnostic = CTP_Client::response_diagnostic( $diagnostic_response, array() );
+check( str_contains( $diagnostic, 'HTML/XML response' ) && str_contains( $diagnostic, 'request-id=absent' ) && ! str_contains( $diagnostic, 'SECRET_PROXY_PAGE' ), 'proxy response distinguished without exposing body' );
+$diagnostic_response['body'] = json_encode( array( 'request_id' => 'req_abcdef1234567890', 'error' => array( 'message' => str_repeat( 'a', 5000 ) ) ) );
+$diagnostic = CTP_Client::response_diagnostic( $diagnostic_response, array() );
+check( strlen( $diagnostic ) < 1800, 'diagnostic detail length bounded' );
+check( str_contains( $diagnostic, 'req_abcdef1234567890' ), 'body request ID fallback supported' );
 $out = $client->translate( array( 8 => 'Vítejte', 19 => '<b>Vítejte</b>' ), 'cs_CZ', 'de_DE' );
 check( $out[8] === 'Willkommen' && $out[19] === '<b>Willkommen</b>', 'IDs preserve non-sequential TRP keys despite reversed output' );
 foreach ( array( 'duplicate', 'html', 'truncated', '429', 'network', 'bad_json', 'extra_field', 'two_texts', 'tool_response', 'refusal' ) as $mode ) {
