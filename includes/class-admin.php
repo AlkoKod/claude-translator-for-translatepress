@@ -73,6 +73,11 @@ final class CTP_Admin {
                 $result = CTP_Bulk::tick();
             } elseif ( $command === 'inspect_source' ) {
                 $result = CTP_Bulk::inspect_blocked_source();
+            } elseif ( $command === 'reset_preview' ) {
+                $languages = array_map( 'sanitize_text_field', (array) wp_unslash( $_POST['reset_languages'] ?? array() ) );
+                $result = CTP_Reset::preview( $languages, sanitize_key( $_POST['reset_mode'] ?? '' ) );
+            } elseif ( $command === 'reset_execute' ) {
+                $result = CTP_Reset::execute( (string) wp_unslash( $_POST['reset_token'] ?? '' ), (string) wp_unslash( $_POST['reset_confirmation'] ?? '' ) );
             } elseif ( $command === 'status' ) {
                 $result = CTP_Bulk::status();
             } else { throw new RuntimeException( 'Unknown command.' ); }
@@ -142,6 +147,26 @@ final class CTP_Admin {
                     <p class="description">Read-only preview of the row blocking this paused job, limited to the first 6,000 characters. Nothing is executed, translated, deleted or excluded. Review for personal data or credentials before copying this preview to support.</p>
                 </div>
                 <p class="description">Keep this page open to run without visitor traffic. For unattended jobs, configure real server cron to run WordPress scheduled events. A running batch finishes before a pause takes effect.</p>
+            </section>
+            <section class="ctp-card">
+                <h2>4. Reset saved translations</h2>
+                <p>Removes manual and automatic translations for the selected target languages, including their current SEO Pack slugs. Translated URLs may change when rebuilt. This cannot be undone here; keep a database backup and close translation-editor tabs first. Reset cancels the old bulk job, disables visitor-triggered translation and invalidates cached Claude results. Your source-language pages, builder templates, API key and settings remain.</p>
+                <form id="ctp-reset-form">
+                    <fieldset><legend>Target languages to reset</legend>
+                    <?php foreach ( array_diff( $settings['translation-languages'] ?? array(), array( $settings['default-language'] ?? '' ) ) as $language ) : ?>
+                        <label class="ctp-language"><input type="checkbox" name="reset_languages[]" value="<?php echo esc_attr( $language ); ?>"> <?php echo esc_html( $language ); ?></label>
+                    <?php endforeach; ?>
+                    </fieldset>
+                    <p><label for="ctp-reset-mode">Reset mode</label> <select name="reset_mode" id="ctp-reset-mode">
+                        <option value="dictionary">Full refresh: remove target dictionaries and translations, then discover current pages again</option>
+                        <option value="translations">Translations only: retain discovered source rows</option>
+                    </select></p>
+                    <p class="description">Full refresh removes stale malformed dictionary rows too. Shared internal TRP source catalogs are retained because other languages may reference them. A fresh scan rebuilds the selected language dictionaries from currently rendered content.</p>
+                    <p><button type="submit" class="button">Preview reset (no deletion)</button></p>
+                    <pre id="ctp-reset-summary" role="status" aria-live="polite"></pre>
+                    <p><label for="ctp-reset-confirmation">After reviewing the preview, type <strong>RESET TRANSLATIONS</strong></label><br><input id="ctp-reset-confirmation" name="reset_confirmation" autocomplete="off" class="regular-text"></p>
+                    <p><button type="button" class="button" id="ctp-reset-execute" disabled>Delete selected translations</button></p>
+                </form>
             </section>
             <section class="ctp-card">
                 <h2>Cache & coverage</h2>

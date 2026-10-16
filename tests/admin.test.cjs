@@ -55,8 +55,55 @@ async function inspectTest() {
   assert.equal(info.textContent, 'No blocked source', 'Inspector error remains in source panel');
   assert.equal(button.disabled, false, 'Button re-enabled after failure');
 }
+async function resetTest() {
+  const element = extra => ({ handlers: {}, addEventListener(type, handler) { this.handlers[type] = handler; }, ...extra });
+  const status = element({ textContent: '' }), form = element({}), reset = element({});
+  const execute = element({ disabled: true }), confirmation = element({ value: '' }), summary = element({ textContent: '' });
+  const nodes = { 'ctp-status': status, 'ctp-job-form': form, 'ctp-reset-form': reset,
+    'ctp-reset-execute': execute, 'ctp-reset-confirmation': confirmation, 'ctp-reset-summary': summary };
+  const requests = []; const token = '01234567-89ab-cdef-0123-456789abcdef';
+  const sandbox = {
+    document: { getElementById: id => nodes[id] || null, querySelectorAll: () => [] },
+    FormData: class { constructor() { this.values = {}; } set(k,v) { this.values[k] = v; } },
+    ctpAdmin: { url: '/mock', nonce: 'nonce' }, setTimeout() {}, clearTimeout() {},
+    fetch: async (_, args) => {
+      requests.push(args.body.values);
+      const command = args.body.values.command;
+      const data = command === 'reset_preview' ? { token, mode: 'dictionary', languages: ['de_DE'], counts: [{ language: 'de_DE', kind: 'regular', count: 42 }] } : command === 'reset_execute' ? { message: 'Reset completed' } : { phase: 'idle', paused: true };
+      return { json: async () => ({ success: true, data }) };
+    },
+  };
+  vm.runInNewContext(fs.readFileSync(require('node:path').join(__dirname, '../assets/admin.js'), 'utf8'), sandbox);
+  await new Promise(resolve => setImmediate(resolve));
+  await execute.handlers.click();
+  assert(!requests.some(r => r.command === 'reset_execute'), 'No reset before preview');
+  await reset.handlers.submit({ preventDefault() {} });
+  assert(summary.textContent.includes('dictionary') && summary.textContent.includes('de_DE') && summary.textContent.includes('42 rows'), 'Preview shows exact mode, languages and counts');
+  assert.equal(execute.disabled, true, 'Preview alone does not enable deletion');
+  confirmation.value = 'wrong'; confirmation.handlers.input();
+  assert.equal(execute.disabled, true, 'Wrong confirmation blocks deletion');
+  confirmation.value = 'RESET TRANSLATIONS'; confirmation.handlers.input();
+  assert.equal(execute.disabled, false, 'Exact confirmation permits explicit reset');
+  reset.handlers.change({ target: confirmation });
+  assert.equal(execute.disabled, false, 'Confirmation blur does not invalidate preview');
+  await execute.handlers.click();
+  const operations = requests.filter(r => r.command === 'reset_execute');
+  assert.equal(operations.length, 1, 'Exactly one reset request from explicit click');
+  assert.equal(operations[0].reset_token, token, 'Reset uses server preview token');
+  assert.equal(operations[0].reset_confirmation, 'RESET TRANSLATIONS', 'Reset sends exact typed confirmation');
+  assert.equal(summary.textContent, 'Reset completed', 'Result visible in reset panel');
+  assert.equal(execute.disabled, true, 'Reset cannot be repeated without preview');
+  await reset.handlers.submit({ preventDefault() {} });
+  confirmation.value = 'RESET TRANSLATIONS'; confirmation.handlers.input();
+  reset.handlers.change({ target: {} });
+  assert.equal(execute.disabled, true, 'Changed selection invalidates preview');
+  assert(summary.textContent.includes('Preview again'), 'Changed selection requires another preview');
+  await execute.handlers.click();
+  assert.equal(requests.filter(r => r.command === 'reset_execute').length, 1, 'Stale preview never executes');
+}
 (async () => {
   for (const usage of [undefined, [], {}, { day: '2026-10-16', characters: 0 }]) await test(usage);
   await inspectTest();
-  console.log('PASS: 21 admin progress/inspector assertions');
+  await resetTest();
+  console.log('PASS: 35 admin progress/inspector/reset assertions');
 })().catch(error => { console.error(error); process.exitCode = 1; });

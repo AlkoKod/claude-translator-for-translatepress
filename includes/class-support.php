@@ -7,6 +7,14 @@ final class CTP_Support {
     public static ?WP_Error $error = null;
     public static ?string $write_language = null;
     public static array $write_originals = array();
+    public static ?string $write_epoch = null;
+
+    /** Bypass the per-request option cache so in-flight responses observe a concurrent reset. */
+    public static function reset_epoch(): string {
+        global $wpdb;
+        $epoch = $wpdb->get_var( $wpdb->prepare( "SELECT option_value FROM {$wpdb->options} WHERE option_name=%s", 'ctp_reset_epoch' ) );
+        return is_string( $epoch ) ? $epoch : '0';
+    }
 
     public static function config(): array {
         return wp_parse_args( get_option( 'ctp_settings', array() ), array(

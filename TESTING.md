@@ -1,4 +1,4 @@
-# Verification record — 0.2.6 preview
+# Verification record — 0.3.0 preview
 
 Date: 2026-10-16.
 
@@ -38,3 +38,5 @@ Production footer diagnosis (read-only public HTML, 2026-10-16): current Czech a
 
 Version 0.2.6: 200 standalone protocol/security assertions, 21 admin UI assertions, 12 real TRP XML regression assertions and 12 inspector assertions passed. XML tests cover exact declarations, malformed/PHP/mixed inputs, API omission, no byte reservation, advancing the real regular/gettext cursors, native engine behavior, unchanged XML original/status and normal text persistence. Paid API responses remain mocked. PHP lint passes on PHP 8.4.26.
 Full 21-assertion WordPress/TRP bulk integration suite also rerun successfully on 0.2.6, including en_GB, SEO persistence, pause/resume and zero additional API calls on the second full run.
+
+Version 0.3.0: 200 protocol/security assertions, 35 admin UI assertions, 22 real WordPress/TRP reset assertions and the full 21-assertion bulk suite passed. Reset tests cover admin access, source-language rejection, preview without deletion, exact typed confirmation, one-use tokens, clearing manual/machine/gettext/current SEO translations, preserving unselected languages, full dictionary removal of malformed historical rows, unchanged API/model/usage, no network calls, forced second-table SQL failure with rollback and stale in-flight response rejection. UI tests cover explicit preview/confirmation flow and selection invalidation. All tests ran only on the disposable local site; no production reset or paid API call was performed.

@@ -12,6 +12,7 @@ final class CTP_Engine extends TRP_Machine_Translator {
     /** Reuse a successful provider result when TRP needs the same text in another dictionary row. */
     public function translate( $strings, $target_language_code, $source_language_code = null, $dictionary_context = 'regular' ) {
         if ( ! $this->is_available() || ! is_array( $strings ) ) { return array(); }
+        $reset_epoch = CTP_Support::reset_epoch();
         $config = CTP_Support::config();
         $source_language_code = $source_language_code ?? $this->settings['default-language'];
         $scope = wp_json_encode( array( $source_language_code, $target_language_code, $dictionary_context, $config['model'], $config['context'], get_option( 'ctp_cache_epoch', '1' ) ) );
@@ -23,6 +24,10 @@ final class CTP_Engine extends TRP_Machine_Translator {
             else { $missing[$index] = $text; }
         }
         $fresh = $missing ? parent::translate( $missing, $target_language_code, $source_language_code, $dictionary_context ) : array();
+        if ( CTP_Support::reset_epoch() !== $reset_epoch ) {
+            CTP_Support::fail( 'reset_during_request', 'Translations were reset while this request was running. Its results were discarded.' );
+            return array();
+        }
         foreach ( $fresh as $original => $translated ) {
             if ( isset( $keys[$original] ) && is_string( $translated ) && $translated !== '' ) {
                 set_transient( $keys[$original], $translated, MONTH_IN_SECONDS );
@@ -30,6 +35,7 @@ final class CTP_Engine extends TRP_Machine_Translator {
         }
         $result = $out + $fresh;
         CTP_Support::$write_language = $target_language_code;
+        CTP_Support::$write_epoch = $reset_epoch;
         CTP_Support::$write_originals = array_keys( $result );
         return $result;
     }

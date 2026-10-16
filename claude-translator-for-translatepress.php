@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Claude Translator for TranslatePress
  * Description: Direct Anthropic Claude translation engine and resumable whole-site translation for TranslatePress.
- * Version: 0.2.6
+ * Version: 0.3.0
  * Requires at least: 6.5
  * Requires PHP: 8.1
  * Requires Plugins: translatepress-multilingual
@@ -10,13 +10,14 @@
  * Text Domain: claude-translator-for-translatepress
  */
 defined( 'ABSPATH' ) || exit;
-define( 'CTP_VERSION', '0.2.6' );
+define( 'CTP_VERSION', '0.3.0' );
 define( 'CTP_FILE', __FILE__ );
 define( 'CTP_DIR', __DIR__ . '/' );
 require_once CTP_DIR . 'includes/class-support.php';
 require_once CTP_DIR . 'includes/class-codec.php';
 require_once CTP_DIR . 'includes/class-client.php';
 require_once CTP_DIR . 'includes/class-bulk.php';
+require_once CTP_DIR . 'includes/class-reset.php';
 require_once CTP_DIR . 'includes/class-admin.php';
 
 // Register before TranslatePress initializes its selected engine on plugins_loaded.
@@ -46,6 +47,7 @@ add_action( 'plugins_loaded', static function () {
 // If an editor reviewed a string while Claude was working, leave that native TRP save alone.
 add_filter( 'trp_allow_string_saving', static function ( $allow, $new, $updates ) {
     if ( ! $allow || ! CTP_Support::$write_language || ! $updates ) { return $allow; }
+    if ( CTP_Support::$write_epoch !== null && CTP_Support::$write_epoch !== CTP_Support::reset_epoch() ) { return false; }
     $originals = array_intersect( array_column( $updates, 'original' ), CTP_Support::$write_originals );
     if ( ! $originals ) { return $allow; }
     $query = TRP_Translate_Press::get_trp_instance()->get_component( 'query' );

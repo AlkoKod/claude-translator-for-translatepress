@@ -73,4 +73,39 @@
     finally { inspect.disabled = false; }
   });
   command('status').then(render).catch(error => { status.textContent = error.message; });
+  const resetForm = document.getElementById('ctp-reset-form');
+  if (resetForm) {
+    const summary = document.getElementById('ctp-reset-summary');
+    const execute = document.getElementById('ctp-reset-execute');
+    const confirmation = document.getElementById('ctp-reset-confirmation');
+    let resetToken = '';
+    let resetRevision = 0;
+    resetForm.addEventListener('change', event => {
+      if (event.target === confirmation) return;
+      ++resetRevision;
+      resetToken = ''; execute.disabled = true; summary.textContent = 'Selection changed. Preview again.';
+    });
+    confirmation.addEventListener('input', () => { execute.disabled = busy || !resetToken || confirmation.value !== 'RESET TRANSLATIONS'; });
+    resetForm.addEventListener('submit', async event => {
+      event.preventDefault(); if (busy) return;
+      const revision = ++resetRevision;
+      resetToken = ''; execute.disabled = true;
+      try {
+        const preview = await command('reset_preview', new FormData(resetForm));
+        if (revision !== resetRevision) return;
+        resetToken = preview.token;
+        summary.textContent = `Mode: ${preview.mode}\nLanguages: ${preview.languages.join(', ')}\n` + preview.counts.map(row => `${row.language} · ${row.kind}: ${row.count} rows`).join('\n');
+        confirmation.value = '';
+      } catch (error) { summary.textContent = error.message; }
+    });
+    execute.addEventListener('click', async () => {
+      if (busy || !resetToken || confirmation.value !== 'RESET TRANSLATIONS') return;
+      busy = true; execute.disabled = true; clearTimeout(timer);
+      const fields = new FormData(); fields.set('reset_token', resetToken); fields.set('reset_confirmation', confirmation.value);
+      resetToken = '';
+      try { const result = await command('reset_execute', fields); summary.textContent = result.message; render(await command('status')); }
+      catch (error) { summary.textContent = error.message; }
+      finally { busy = false; }
+    });
+  }
 })();

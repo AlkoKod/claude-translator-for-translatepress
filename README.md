@@ -2,7 +2,18 @@
 
 A small, independent WordPress plugin that adds **Anthropic Claude (direct API)** to TranslatePress's native automatic translation providers, plus a resumable bulk translation runner.
 
-**0.2.6 is a preview release.** The local integration suite passes against WordPress 7.1.3, TranslatePress 3.3.8 and the Developer 1.8.8 add-on, on PHP 8.4.26 and MariaDB 11.4.5. Anthropic responses are mocked in automated tests; a live-key smoke test and staging verification are required before production use. No premium TranslatePress code is included in this repository.
+**0.3.0 is a preview release.** The local integration suite passes against WordPress 7.1.3, TranslatePress 3.3.8 and the Developer 1.8.8 add-on, on PHP 8.4.26 and MariaDB 11.4.5. Anthropic responses are mocked in automated tests; a live-key smoke test and staging verification are required before production use. No premium TranslatePress code is included in this repository.
+
+## Reset and rebuild dictionaries (0.3.0)
+
+Under **Tools → Claude Translate → Reset saved translations**, select target languages, choose a mode and preview exact row counts. Type **RESET TRANSLATIONS** and click the delete button only after reviewing the preview and making a database backup. This removes manual and machine translations, including current SEO Pack slug translations for the selected languages; translated URLs may change. Close translation-editor tabs while resetting. Nothing is reset merely by installing this version.
+
+- **Full refresh (default):** empties selected regular/gettext language dictionaries, including stale malformed source rows. Start a new bulk job to rebuild from currently rendered public pages. Fix template output first. Shared internal TRP source catalogs remain because other language tables may reference them; obsolete fragments in those catalogs do not repopulate the bulk queue unless encountered again on current pages.
+- **Translations only:** clears translated values and resets translated statuses while retaining discovered originals.
+
+The source language cannot be selected. Source pages, builder templates, language configuration, glossary/settings, API key and Claude context/model are retained. The reset cancels the old job, disables visitor-triggered Claude calls, invalidates provider result caches and prevents stale in-flight Claude responses from being saved. Usage counters remain unchanged. Clear affected translated-page caches explicitly, then start a new bulk job; no site-wide cache purge is triggered by the plugin.
+
+Reset requires manage_options, the admin AJAX nonce, a per-user one-use preview token (10-minute expiry), exact typed confirmation and the worker lock. Tables and schemas are derived server-side; no browser-supplied table names are used. Only InnoDB tables are accepted, and dictionary/slug changes share a rollback-capable transaction. A failed reset leaves the worker paused and visitor translation off. Legacy SEO Pack metadata storage outside the current shared slug tables is outside this reset's support.
 
 ## XML metadata fix (0.2.6)
 
@@ -41,7 +52,7 @@ On upgrade, the former default `claude-sonnet-4-6` is migrated to `claude-sonnet
 - Uses TranslatePress's own renderer, dictionary, sanitization, machine-translation statuses, exclusion filters and save paths. Translations remain editable in the normal TRP editor.
 - Scans published, public, password-free posts/pages and public custom post types before translating, without waiting for visitors. Add archive/pagination URLs manually.
 - Processes regular text and discovered gettext strings in small batches, then renders the scanned pages again so the active SEO Pack can persist translated slugs.
-- Preserves existing translations. There is no "delete all translations" function.
+- Preserves existing translations during normal translation. An explicit admin reset can clear selected-language translations or rebuild their dictionaries.
 - Has pause/resume/cancel, progress reporting, WP-CLI support and a conservative daily source-byte cap.
 - Masks markup/attributes, shortcodes, URLs, email addresses, printf and TRP placeholders before sending text for translation, then verifies their integrity before restoring them.
 - Rejects incomplete responses, unknown/duplicate IDs and new HTML. Failed batches do not become source-as-translation placeholders.
