@@ -61,8 +61,7 @@ final class CTP_Client {
         }
         $code = wp_remote_retrieve_response_code( $response );
         if ( $code !== 200 ) {
-            // Deliberately omit upstream response text: it may echo source or credentials.
-            CTP_Support::fail( 'http_' . $code, 'Anthropic returned HTTP ' . $code . '. Check API billing, key, model access or rate limits, then resume.' );
+            CTP_Support::fail( 'http_' . $code, self::http_error( $code, wp_remote_retrieve_body( $response ) ) );
             return array();
         }
         $body = json_decode( wp_remote_retrieve_body( $response ), true );
@@ -100,5 +99,35 @@ final class CTP_Client {
             CTP_Support::fail( 'invalid_response', $e->getMessage() );
             return array();
         }
+    }
+
+    /** Classify upstream errors using fixed messages only; never display or store the upstream body. */
+    public static function http_error( int $code, string $body ): string {
+        $data = json_decode( $body, true );
+        $error = is_array( $data ) && is_array( $data['error'] ?? null ) ? $data['error'] : array();
+        $message = is_string( $error['message'] ?? null ) ? strtolower( $error['message'] ) : '';
+        $reason = 'Request rejected. The response does not match a recognized safe diagnostic; check the failed request in the Anthropic Console before retrying.';
+        if ( $code === 401 ) {
+            $reason = 'API authentication failed. Check the saved API key.';
+        } elseif ( $code === 403 ) {
+            $reason = 'API permission denied. Check the organization and model permissions.';
+        } elseif ( $code === 429 ) {
+            $reason = 'API rate or spending limit reached. Check limits in the Anthropic Console and wait before resuming.';
+        } elseif ( $code >= 500 ) {
+            $reason = 'Anthropic is temporarily unavailable. Resume later; an ambiguous failure may already have incurred usage.';
+        } elseif ( $code === 400 || $code === 404 ) {
+            if ( str_contains( $message, 'credit balance' ) || str_contains( $message, 'purchase credits' ) ) {
+                $reason = 'API credit balance is too low. Add API credits in the Anthropic Console, then resume. A Claude chat subscription does not provide API credits.';
+            } elseif ( str_contains( $message, 'model' ) && preg_match( '/not found|does not exist|access|not available|invalid model/', $message ) ) {
+                $reason = 'Selected model is unavailable or inaccessible to this API account. Verify model access in the Anthropic Console.';
+            } elseif ( str_contains( $message, 'thinking' ) || str_contains( $message, 'between_tools' ) || str_contains( $message, 'effort' ) ) {
+                $reason = 'API rejected the thinking or effort configuration. Report this diagnostic to the plugin maintainer.';
+            } elseif ( str_contains( $message, 'schema' ) || str_contains( $message, 'output_config' ) || str_contains( $message, 'output format' ) ) {
+                $reason = 'API rejected the structured output configuration. Report this diagnostic to the plugin maintainer.';
+            } elseif ( str_contains( $message, 'max_tokens' ) || str_contains( $message, 'too many tokens' ) || str_contains( $message, 'too long' ) ) {
+                $reason = 'API rejected the token budget or input length. Report this diagnostic to the plugin maintainer.';
+            }
+        }
+        return 'Anthropic returned HTTP ' . $code . '. ' . $reason;
     }
 }

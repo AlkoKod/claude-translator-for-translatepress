@@ -85,6 +85,25 @@ $GLOBALS['http_mock'] = function ( $url, $args ) use ( &$calls, &$mode ) {
     return array( 'response' => array( 'code' => 200 ), 'body' => json_encode( array( 'content' => $content, 'stop_reason' => $mode === 'truncated' ? 'max_tokens' : ( $mode === 'refusal' ? 'refusal' : 'end_turn' ) ) ) );
 };
 $client = new CTP_Client();
+foreach ( array(
+    array( 400, 'Your credit balance is too low SECRET_UPSTREAM_TEXT', 'API credit balance is too low' ),
+    array( 400, 'Please purchase credits SECRET_UPSTREAM_TEXT', 'API credit balance is too low' ),
+    array( 404, 'model does not exist SECRET_UPSTREAM_TEXT', 'Selected model is unavailable' ),
+    array( 400, 'thinking: unsupported value SECRET_UPSTREAM_TEXT', 'thinking or effort configuration' ),
+    array( 400, 'output_config.format invalid schema SECRET_UPSTREAM_TEXT', 'structured output configuration' ),
+    array( 400, 'max_tokens is invalid SECRET_UPSTREAM_TEXT', 'token budget or input length' ),
+    array( 401, 'SECRET_UPSTREAM_TEXT', 'authentication failed' ),
+    array( 403, 'SECRET_UPSTREAM_TEXT', 'permission denied' ),
+    array( 429, 'SECRET_UPSTREAM_TEXT', 'rate or spending limit' ),
+    array( 529, 'SECRET_UPSTREAM_TEXT', 'temporarily unavailable' ),
+    array( 400, 'SECRET_UPSTREAM_TEXT TEST_NOT_A_REAL_KEY', 'does not match a recognized safe diagnostic' ),
+) as [ $status, $upstream, $expected ] ) {
+    $diagnostic = CTP_Client::http_error( $status, json_encode( array( 'error' => array( 'message' => $upstream ) ) ) );
+    check( str_contains( $diagnostic, $expected ), 'safe HTTP diagnostic classification: ' . $expected );
+    check( ! str_contains( $diagnostic, 'SECRET' ) && ! str_contains( $diagnostic, 'TEST_NOT_A_REAL_KEY' ), 'upstream text and credentials stay private' );
+}
+check( str_contains( CTP_Client::http_error( 400, '<html>SECRET_PROXY_BODY</html>' ), 'does not match a recognized safe diagnostic' ), 'non-JSON upstream body handled safely' );
+check( str_contains( CTP_Client::http_error( 400, '{"error":{"message":[]}}' ), 'does not match a recognized safe diagnostic' ), 'malformed upstream error handled safely' );
 $out = $client->translate( array( 8 => 'Vítejte', 19 => '<b>Vítejte</b>' ), 'cs_CZ', 'de_DE' );
 check( $out[8] === 'Willkommen' && $out[19] === '<b>Willkommen</b>', 'IDs preserve non-sequential TRP keys despite reversed output' );
 foreach ( array( 'duplicate', 'html', 'truncated', '429', 'network', 'bad_json', 'extra_field', 'two_texts', 'tool_response', 'refusal' ) as $mode ) {
