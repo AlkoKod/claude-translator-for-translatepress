@@ -6,7 +6,7 @@ final class CTP_Client {
     public const MAX_BYTES = 12000;
     public const MAX_STRINGS = 16;
 
-    /** @param bool $retry_missing Re-request, once, items the model omitted from an otherwise valid response. */
+    /** @param bool $retry_missing Re-request items the model omitted from an otherwise valid response, one per request. */
     public function translate( array $strings, string $source, string $target, bool $retry_missing = true ): array {
         CTP_Support::$error = null;
         CTP_Support::$failed_original = null;
@@ -126,12 +126,20 @@ final class CTP_Client {
         if ( $omitted ) {
             if ( ! $retry_missing ) {
                 CTP_Support::$failed_original = reset( $omitted );
-                CTP_Support::fail( 'invalid_response', 'Response omitted ' . count( $omitted ) . ' translation(s) again after a retry. No translation was saved.' );
+                CTP_Support::fail( 'omitted', 'Claude returned no translation for this text.' );
                 return array();
             }
-            $retried = $this->translate( $omitted, $source, $target, false );
-            if ( CTP_Support::$error ) { return array(); }
-            $result += $retried;
+            // Sending each omitted text alone isolates the one the model skips, so the rest still get translated.
+            foreach ( $omitted as $key => $text ) {
+                $single = $this->translate( array( $key => $text ), $source, $target, false );
+                if ( CTP_Support::$error && CTP_Support::$error->get_error_code() === 'omitted' ) {
+                    CTP_Support::$omitted[] = $text;
+                    CTP_Support::$error = null; CTP_Support::$failed_original = null;
+                    continue;
+                }
+                if ( CTP_Support::$error ) { return array(); }
+                $result += $single;
+            }
         }
         return $result + $unchanged;
     }

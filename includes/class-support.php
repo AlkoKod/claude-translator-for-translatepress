@@ -11,6 +11,8 @@ final class CTP_Support {
     public static ?string $write_epoch = null;
     /** Per-batch evidence for explaining why TRP did not persist a bulk batch; null outside a bulk batch. */
     public static ?array $diag = null;
+    /** Originals Claude returned no translation for, even when sent alone; left untranslated, not failed. */
+    public static array $omitted = array();
 
     /** Bypass the per-request option cache so in-flight responses observe a concurrent reset. */
     public static function reset_epoch(): string {

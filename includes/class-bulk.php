@@ -287,7 +287,7 @@ final class CTP_Bulk {
             $strings[] = $text; $processed_ids[] = $cursor; $bytes += strlen( $text );
         }
         if ( $strings ) {
-            CTP_Support::$bulk = true; CTP_Support::$error = null; CTP_Support::$failed_original = null;
+            CTP_Support::$bulk = true; CTP_Support::$error = null; CTP_Support::$failed_original = null; CTP_Support::$omitted = array();
             $engine = self::engine();
             $locked_before = $engine->lock_skipped_count();
             CTP_Support::$diag = array( 'table' => $table, 'engine_calls' => 0, 'requested' => 0, 'returned' => 0, 'save_calls' => array(), 'pending_write' => false, 'db_error' => '' );
@@ -306,10 +306,11 @@ final class CTP_Bulk {
             // Verify the exact pending row IDs; a collation-equivalent title is not proof that a slug row was saved.
             $pending = $wpdb->get_col( "SELECT id FROM `{$table}` WHERE id IN (" . implode( ',', $processed_ids ) . ') AND status=0 ORDER BY id' );
             if ( $wpdb->last_error ) { throw new RuntimeException( 'Cannot verify saved translations in the TRP dictionary.' ); }
+            $pending = self::leave_omitted( $job, $pending );
             if ( $pending ) {
                 throw new RuntimeException( 'Some translations were not persisted (dictionary rows ' . implode( ', ', array_map( 'intval', $pending ) ) . '). ' . self::persist_reason( $diag, $engine, $locked_before, count( $strings ) ) . ' Saved strings will be reused.' );
             }
-            $job['translated'] += count( array_unique( $strings ) );
+            $job['translated'] += max( 0, count( array_unique( $strings ) ) - count( CTP_Support::$omitted ) );
         }
         $job['skipped'] += $skipped;
         $job['xml_declarations'] = ( $job['xml_declarations'] ?? 0 ) + $xml_skipped;
@@ -334,6 +335,17 @@ final class CTP_Bulk {
         ( function () use ( $engine ) { if ( $this->machine_translator && ! $this->machine_translator instanceof CTP_Engine ) { $this->machine_translator = $engine; } } )
             ->call( $trp->get_component( 'translation_render' ) );
         return $engine;
+    }
+
+    /**
+     * Rows Claude returned nothing for, even alone, stay untranslated and are listed instead of pausing the job.
+     * TRP rewrites text before the engine sees it, so match by count: only when every unsaved row is accounted for.
+     */
+    private static function leave_omitted( array &$job, array $pending ): array {
+        if ( ! $pending || ! CTP_Support::$omitted || count( $pending ) > count( CTP_Support::$omitted ) ) { return $pending; }
+        $job['omitted'] = ( $job['omitted'] ?? 0 ) + count( $pending );
+        $job['omitted_rows'] = array_slice( array_merge( $job['omitted_rows'] ?? array(), array_map( 'intval', $pending ) ), 0, 100 );
+        return array();
     }
 
     /** Explain an unsaved batch from what this request observed; never guesses beyond that evidence. */
@@ -400,7 +412,8 @@ final class CTP_Bulk {
         if ( $queue ) {
             // Expose TRP's protected queue runner without copying its persistence implementation.
             require_once CTP_DIR . 'includes/class-gettext-runner.php';
-            CTP_Support::$bulk = true; CTP_Support::$error = null; CTP_Support::$failed_original = null;
+            CTP_Support::$bulk = true; CTP_Support::$error = null; CTP_Support::$failed_original = null; CTP_Support::$omitted = array();
+            self::engine();
             ( new CTP_Gettext_Runner( CTP_Support::trp_settings() ) )->run_queue( $queue, $language );
             if ( CTP_Support::$error ) {
                 foreach ( $rows as $row ) {
@@ -412,8 +425,9 @@ final class CTP_Bulk {
             $ids = array_map( 'intval', array_column( $queue, 'id' ) );
             $pending = $wpdb->get_col( "SELECT id FROM `{$table}` WHERE id IN (" . implode( ',', $ids ) . ') AND status=0 ORDER BY id' );
             if ( $wpdb->last_error ) { throw new RuntimeException( 'Cannot verify saved translations in the TRP gettext table.' ); }
+            $pending = self::leave_omitted( $job, $pending );
             if ( $pending ) { throw new RuntimeException( 'Gettext translations were not saved (gettext rows ' . implode( ', ', array_map( 'intval', $pending ) ) . '). Check TRP exclusions and quota, then resume.' ); }
-            $job['translated'] += count( $queue );
+            $job['translated'] += max( 0, count( $queue ) - count( CTP_Support::$omitted ) );
         }
         $job['skipped'] += $xml_skipped;
         $job['xml_declarations'] = ( $job['xml_declarations'] ?? 0 ) + $xml_skipped;
