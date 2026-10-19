@@ -186,6 +186,7 @@ final class CTP_Bulk {
             if ( ! $job || get_option( 'ctp_paused', true ) || in_array( $job['phase'], array( 'done', 'cancelled' ), true ) ) { return self::status(); }
             try {
                 self::assert_ready();
+                self::engine();
                 $settings = CTP_Support::trp_settings();
                 if ( $job['source'] !== $settings['default-language'] || array_diff( $job['languages'], $settings['translation-languages'] ) ) {
                     throw new RuntimeException( 'TranslatePress languages changed. Cancel this job and start a new one.' );
@@ -287,8 +288,8 @@ final class CTP_Bulk {
         }
         if ( $strings ) {
             CTP_Support::$bulk = true; CTP_Support::$error = null; CTP_Support::$failed_original = null;
-            $engine = $trp->get_component( 'machine_translator' );
-            $locked_before = $engine instanceof CTP_Engine ? $engine->lock_skipped_count() : 0;
+            $engine = self::engine();
+            $locked_before = $engine->lock_skipped_count();
             CTP_Support::$diag = array( 'table' => $table, 'engine_calls' => 0, 'requested' => 0, 'returned' => 0, 'save_calls' => array(), 'pending_write' => false, 'db_error' => '' );
             try {
                 // TRP's normal renderer consults its dictionary before calling our engine and saves results itself.
@@ -314,6 +315,25 @@ final class CTP_Bulk {
         $job['xml_declarations'] = ( $job['xml_declarations'] ?? 0 ) + $xml_skipped;
         $job['reviewed_equivalents'] = ( $job['reviewed_equivalents'] ?? 0 ) + $reviewed_skipped;
         $job['cursor'] = $cursor;
+    }
+
+    /**
+     * WP-cron requests can skip TRP's hook loader (e.g. "Do not translate certain paths" does not match /wp-cron.php),
+     * leaving its placeholder engine, which is never available. TRP repairs WooCommerce cron emails the same way.
+     */
+    private static function engine(): CTP_Engine {
+        $trp = TRP_Translate_Press::get_trp_instance();
+        if ( ! $trp->get_component( 'machine_translator' ) instanceof CTP_Engine && method_exists( $trp, 'init_machine_translation' ) ) {
+            $trp->init_machine_translation();
+        }
+        $engine = $trp->get_component( 'machine_translator' );
+        if ( ! $engine instanceof CTP_Engine ) {
+            throw new RuntimeException( 'TranslatePress did not load the Claude engine in this request. Save the TranslatePress Automatic Translation settings, then resume.' );
+        }
+        // The renderer caches the engine lazily; replace a placeholder cached before initialization.
+        ( function () use ( $engine ) { if ( $this->machine_translator && ! $this->machine_translator instanceof CTP_Engine ) { $this->machine_translator = $engine; } } )
+            ->call( $trp->get_component( 'translation_render' ) );
+        return $engine;
     }
 
     /** Explain an unsaved batch from what this request observed; never guesses beyond that evidence. */

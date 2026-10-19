@@ -3,7 +3,7 @@ Tags: translatepress, claude, translation, anthropic, multilingual
 Requires at least: 6.5
 Tested up to: 7.1.3
 Requires PHP: 8.1
-Stable tag: 0.3.3
+Stable tag: 0.3.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -50,6 +50,9 @@ No. Extra languages, SEO Pack and other premium features still require your norm
 It uses TRP's rendered HTML extraction. Gutenberg rendering and representative Divi/Oxygen/Bricks HTML fixtures are tested. Full builder plugin certification is not claimed.
 
 == Changelog ==
+
+= 0.3.4 =
+Fix bulk batches run by WP-cron being left unsaved with "TranslatePress did not call the engine". When TranslatePress skips its hooks for /wp-cron.php (for example because of "Do not translate certain paths"), only its placeholder engine is loaded and it never reports itself available. Bulk mode now loads the Claude engine itself, the same way TranslatePress handles WooCommerce cron emails.
 
 = 0.3.3 =
 When TranslatePress does not save a bulk batch, the error now states the cause this request observed: engine not called, strings held by another request's translation lock, no engine result, a trp_allow_string_saving veto, a dictionary database error, or originals missing from the original-strings table.

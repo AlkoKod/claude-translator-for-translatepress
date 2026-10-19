@@ -1,4 +1,4 @@
-# Verification record — 0.3.3 preview
+# Verification record — 0.3.4 preview
 
 Date: 2026-10-16.
 
@@ -47,3 +47,5 @@ The full 21-assertion bulk integration suite also passed sequentially on 0.3.1, 
 Version 0.3.2: PHP lint, 230 standalone protocol/security assertions and 35 admin UI assertions pass on PHP 8.4 and in GitHub CI on PHP 8.1–8.5. The new `tests/reviewed-integration.php` (reviewed collation-equivalent skip, partial-batch save, cursor advance, unsaved row IDs in the error) has not yet been run against real WordPress/TRP.
 
 Version 0.3.3: PHP lint, 230 standalone protocol/security assertions and 35 admin UI assertions pass on PHP 8.4. Cause diagnostics were written against the TranslatePress 3.3.8 process_strings/lock code. Only the save-veto cause has an integration assertion (`tests/reviewed-integration.php`), and that test has not yet been run against real WordPress/TRP.
+
+Version 0.3.4: PHP lint, 230 standalone and 35 admin UI assertions pass on PHP 8.4. The cron/placeholder-engine cause was identified from the production diagnostic and the TranslatePress 3.3.8 source. `tests/reviewed-integration.php` adds a placeholder-engine assertion, but that test has not yet been run against real WordPress/TRP.

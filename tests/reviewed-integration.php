@@ -42,6 +42,18 @@ try {
     $check( str_contains( $message, 'not persisted (dictionary rows ' . $blocked_id . ')' ), 'Persistence failure names the unsaved row IDs' );
     $check( str_contains( $message, 'trp_allow_string_saving filter rejected the save' ), 'Persistence failure names the observed cause' );
     $check( $calls === 2, 'One mocked request per batch; skipped variant is never sent' );
+
+    // Simulate a WP-cron request where TRP's hooks did not run and only its placeholder engine exists.
+    $trp = TRP_Translate_Press::get_trp_instance();
+    $placeholder = new TRP_Machine_Translator( CTP_Support::trp_settings() );
+    ( function () use ( $placeholder ) { $this->machine_translator = $placeholder; } )->call( $trp );
+    ( function () use ( $placeholder ) { $this->machine_translator = $placeholder; } )->call( $trp->get_component( 'translation_render' ) );
+    $cron = 'Cron fixture ' . wp_generate_uuid4();
+    $cron_id = $insert( $cron, 0 );
+    $job = array( 'phase' => 'translate', 'languages' => array( 'de_DE' ), 'language_index' => 0, 'cursor' => $cron_id - 1, 'translated' => 0, 'skipped' => 0 );
+    ( new ReflectionMethod( CTP_Bulk::class, 'translate' ) )->invokeArgs( null, array( &$job ) );
+    $check( $trp->get_component( 'machine_translator' ) instanceof CTP_Engine, 'Placeholder engine is replaced by the Claude engine' );
+    $check( (int) $wpdb->get_var( $wpdb->prepare( "SELECT status FROM `{$table}` WHERE id=%d", $cron_id ) ) !== 0 && $calls === 3, 'Batch is translated and saved without TRP hooks' );
 } finally {
     CTP_Support::$bulk = false;
     foreach ( $ids as $id ) { if ( $id ) { $wpdb->delete( $table, array( 'id' => $id ) ); } }

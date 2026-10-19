@@ -2,7 +2,11 @@
 
 A small, independent WordPress plugin that adds **Anthropic Claude (direct API)** to TranslatePress's native automatic translation providers, plus a resumable bulk translation runner.
 
-**0.3.3 is a preview release.** The local integration suite passes against WordPress 7.1.3, TranslatePress 3.3.8 and the Developer 1.8.8 add-on, on PHP 8.4.26 and MariaDB 11.4.5. Anthropic responses are mocked in automated tests; a live-key smoke test and staging verification are required before production use. No premium TranslatePress code is included in this repository.
+**0.3.4 is a preview release.** The local integration suite passes against WordPress 7.1.3, TranslatePress 3.3.8 and the Developer 1.8.8 add-on, on PHP 8.4.26 and MariaDB 11.4.5. Anthropic responses are mocked in automated tests; a live-key smoke test and staging verification are required before production use. No premium TranslatePress code is included in this repository.
+
+## WP-cron batches (0.3.4)
+
+TranslatePress can skip its hooks on `/wp-cron.php`, for example when "Do not translate certain paths" is set. Its selected engine is then never loaded, and batches run by cron were left untranslated, so the job paused after every batch or two. Bulk mode now loads the Claude engine itself before each batch, the same way TranslatePress handles WooCommerce cron emails.
 
 ## Persistence failure causes (0.3.3)
 
