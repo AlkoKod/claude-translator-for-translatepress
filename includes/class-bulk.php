@@ -287,8 +287,15 @@ final class CTP_Bulk {
         }
         if ( $strings ) {
             CTP_Support::$bulk = true; CTP_Support::$error = null; CTP_Support::$failed_original = null;
-            // TRP's normal renderer consults its dictionary before calling our engine and saves results itself.
-            $trp->get_component( 'translation_render' )->process_strings( $strings, $language );
+            $engine = $trp->get_component( 'machine_translator' );
+            $locked_before = $engine instanceof CTP_Engine ? $engine->lock_skipped_count() : 0;
+            CTP_Support::$diag = array( 'table' => $table, 'engine_calls' => 0, 'requested' => 0, 'returned' => 0, 'save_calls' => array(), 'pending_write' => false, 'db_error' => '' );
+            try {
+                // TRP's normal renderer consults its dictionary before calling our engine and saves results itself.
+                $trp->get_component( 'translation_render' )->process_strings( $strings, $language );
+                $wpdb->query( 'SELECT 1' ); // Flushes a trailing dictionary-write error into the diagnostics.
+                $diag = CTP_Support::$diag;
+            } finally { CTP_Support::$diag = null; }
             if ( CTP_Support::$error ) {
                 foreach ( $rows as $row ) {
                     if ( $row['original'] === CTP_Support::$failed_original ) { throw new RuntimeException( 'Translation validation failed at dictionary row ' . (int) $row['id'] . ': ' . CTP_Support::$error->get_error_message() ); }
@@ -299,7 +306,7 @@ final class CTP_Bulk {
             $pending = $wpdb->get_col( "SELECT id FROM `{$table}` WHERE id IN (" . implode( ',', $processed_ids ) . ') AND status=0 ORDER BY id' );
             if ( $wpdb->last_error ) { throw new RuntimeException( 'Cannot verify saved translations in the TRP dictionary.' ); }
             if ( $pending ) {
-                throw new RuntimeException( 'Some translations were not persisted (dictionary rows ' . implode( ', ', array_map( 'intval', $pending ) ) . '). Check the TRP daily quota and error log, then resume. Saved strings will be reused.' );
+                throw new RuntimeException( 'Some translations were not persisted (dictionary rows ' . implode( ', ', array_map( 'intval', $pending ) ) . '). ' . self::persist_reason( $diag, $engine, $locked_before, count( $strings ) ) . ' Saved strings will be reused.' );
             }
             $job['translated'] += count( array_unique( $strings ) );
         }
@@ -307,6 +314,34 @@ final class CTP_Bulk {
         $job['xml_declarations'] = ( $job['xml_declarations'] ?? 0 ) + $xml_skipped;
         $job['reviewed_equivalents'] = ( $job['reviewed_equivalents'] ?? 0 ) + $reviewed_skipped;
         $job['cursor'] = $cursor;
+    }
+
+    /** Explain an unsaved batch from what this request observed; never guesses beyond that evidence. */
+    private static function persist_reason( array $diag, $engine, int $locked_before, int $sent ): string {
+        global $trp_machine_translation_deadline;
+        $locked = $engine instanceof CTP_Engine ? $engine->lock_skipped_count() - $locked_before : 0;
+        if ( ! $diag['engine_calls'] ) {
+            if ( isset( $trp_machine_translation_deadline ) && microtime( true ) > $trp_machine_translation_deadline ) {
+                return 'Cause: TranslatePress did not call the engine because its per-request time budget (trp_machine_translation_time_budget) had expired.';
+            }
+            return 'Cause: TranslatePress did not call the engine for these strings; it treated them as already present in its dictionary or not machine-translatable.';
+        }
+        if ( $locked > 0 ) {
+            return 'Cause: TranslatePress skipped ' . $locked . ' of ' . $sent . ' strings because another request holds their translation lock (in progress or translated within the last ~50 s). Wait a minute, then resume.';
+        }
+        if ( ! $diag['returned'] ) {
+            return 'Cause: the engine returned no translations.' . ( $engine instanceof CTP_Engine ? ' TRP characters today: ' . implode( ' of ', $engine->quota_state() ) . '.' : '' );
+        }
+        if ( array_filter( $diag['save_calls'], static fn( $call ) => ! $call['allowed'] ) ) {
+            return 'Cause: a trp_allow_string_saving filter rejected the save (a human-reviewed equivalent, a translation reset, or another plugin).';
+        }
+        if ( $diag['db_error'] !== '' ) {
+            return 'Cause: the TRP dictionary write failed with a database error: ' . mb_substr( preg_replace( '/[\x00-\x1f\x7f]/', ' ', $diag['db_error'] ), 0, 300 ) . '.';
+        }
+        if ( ! $diag['save_calls'] ) {
+            return 'Cause: TranslatePress received ' . $diag['returned'] . ' translations but did not attempt to save them; their originals did not match its original-strings table.';
+        }
+        return 'Cause: TranslatePress saved ' . array_sum( array_column( $diag['save_calls'], 'rows' ) ) . ' rows, but not these dictionary rows. Check for duplicate originals that differ only in case, accents or spacing.';
     }
 
     private static function gettext( array &$job ): void {

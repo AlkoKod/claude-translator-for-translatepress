@@ -2,7 +2,11 @@
 
 A small, independent WordPress plugin that adds **Anthropic Claude (direct API)** to TranslatePress's native automatic translation providers, plus a resumable bulk translation runner.
 
-**0.3.2 is a preview release.** The local integration suite passes against WordPress 7.1.3, TranslatePress 3.3.8 and the Developer 1.8.8 add-on, on PHP 8.4.26 and MariaDB 11.4.5. Anthropic responses are mocked in automated tests; a live-key smoke test and staging verification are required before production use. No premium TranslatePress code is included in this repository.
+**0.3.3 is a preview release.** The local integration suite passes against WordPress 7.1.3, TranslatePress 3.3.8 and the Developer 1.8.8 add-on, on PHP 8.4.26 and MariaDB 11.4.5. Anthropic responses are mocked in automated tests; a live-key smoke test and staging verification are required before production use. No premium TranslatePress code is included in this repository.
+
+## Persistence failure causes (0.3.3)
+
+When a bulk batch is not saved, the job error lists the unsaved row IDs and the cause observed in that request: TranslatePress did not call the engine, strings were held by another request's translation lock (wait about a minute and resume), the engine returned nothing, a `trp_allow_string_saving` filter refused the save, the dictionary write returned a database error (quoted), or TranslatePress did not attempt the save.
 
 ## Reviewed variants and persistence errors (0.3.2)
 

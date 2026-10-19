@@ -16,6 +16,7 @@ final class CTP_Engine extends TRP_Machine_Translator {
         $config = CTP_Support::config();
         $source_language_code = $source_language_code ?? $this->settings['default-language'];
         $scope = wp_json_encode( array( $source_language_code, $target_language_code, $dictionary_context, $config['model'], $config['context'], get_option( 'ctp_cache_epoch', '1' ) ) );
+        if ( CTP_Support::$diag !== null ) { ++CTP_Support::$diag['engine_calls']; CTP_Support::$diag['requested'] += count( $strings ); }
         $keys = $missing = $out = array();
         foreach ( $strings as $index => $text ) {
             $keys[$text] = 'ctp_result_' . hash( 'sha256', $scope . '|' . $text );
@@ -34,10 +35,19 @@ final class CTP_Engine extends TRP_Machine_Translator {
             }
         }
         $result = $out + $fresh;
+        if ( CTP_Support::$diag !== null ) { CTP_Support::$diag['returned'] += count( $result ); }
         CTP_Support::$write_language = $target_language_code;
         CTP_Support::$write_epoch = $reset_epoch;
         CTP_Support::$write_originals = array_keys( $result );
         return $result;
+    }
+    /** Strings TRP dropped because another request holds their concurrency lock. */
+    public function lock_skipped_count(): int {
+        return method_exists( $this, 'get_lock_skipped_strings' ) ? count( $this->get_lock_skipped_strings() ) : 0;
+    }
+    public function quota_state(): array {
+        return array( 'used' => (int) $this->machine_translator_logger->get_todays_character_count(),
+            'limit' => (int) ( $this->settings['trp_machine_translation_settings']['machine_translation_limit'] ?? 1000000 ) );
     }
     public function is_available( $languages = array() ) {
         if ( CTP_Support::$scan || ( ! CTP_Support::$bulk && ! CTP_Support::config()['visitor_translation'] ) ) { return false; }

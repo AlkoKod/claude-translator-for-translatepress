@@ -40,6 +40,7 @@ try {
     catch ( RuntimeException $e ) { $message = $e->getMessage(); }
     remove_filter( 'trp_allow_string_saving', $deny, 99 );
     $check( str_contains( $message, 'not persisted (dictionary rows ' . $blocked_id . ')' ), 'Persistence failure names the unsaved row IDs' );
+    $check( str_contains( $message, 'trp_allow_string_saving filter rejected the save' ), 'Persistence failure names the observed cause' );
     $check( $calls === 2, 'One mocked request per batch; skipped variant is never sent' );
 } finally {
     CTP_Support::$bulk = false;
