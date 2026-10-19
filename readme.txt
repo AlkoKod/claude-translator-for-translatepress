@@ -3,7 +3,7 @@ Tags: translatepress, claude, translation, anthropic, multilingual
 Requires at least: 6.5
 Tested up to: 7.1.3
 Requires PHP: 8.1
-Stable tag: 0.3.1
+Stable tag: 0.3.2
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -50,6 +50,9 @@ No. Extra languages, SEO Pack and other premium features still require your norm
 It uses TRP's rendered HTML extraction. Gutenberg rendering and representative Divi/Oxygen/Bricks HTML fixtures are tested. Full builder plugin certification is not claimed.
 
 == Changelog ==
+
+= 0.3.2 =
+A bulk job no longer stalls with "Some translations were not persisted" when a human-reviewed string differs from a pending one only in case, accents or trailing spaces. Such rows are left for review and counted separately; the rest of the batch is saved. Persistence errors now list the unsaved dictionary row IDs.
 
 = 0.3.1 =
 Protect literal angle brackets and entities. Keep non-linguistic strings unchanged without API calls. Distinguish empty output from introduced HTML and identify exact failed regular/gettext rows for inspection. Preserve validation and existing translations; no automatic paid retries.
