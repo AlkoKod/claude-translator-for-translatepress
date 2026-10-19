@@ -2,7 +2,11 @@
 
 A small, independent WordPress plugin that adds **Anthropic Claude (direct API)** to TranslatePress's native automatic translation providers, plus a resumable bulk translation runner.
 
-**0.3.4 is a preview release.** The local integration suite passes against WordPress 7.1.3, TranslatePress 3.3.8 and the Developer 1.8.8 add-on, on PHP 8.4.26 and MariaDB 11.4.5. Anthropic responses are mocked in automated tests; a live-key smoke test and staging verification are required before production use. No premium TranslatePress code is included in this repository.
+**0.3.5 is a preview release.** The local integration suite passes against WordPress 7.1.3, TranslatePress 3.3.8 and the Developer 1.8.8 add-on, on PHP 8.4.26 and MariaDB 11.4.5. Anthropic responses are mocked in automated tests; a live-key smoke test and staging verification are required before production use. No premium TranslatePress code is included in this repository.
+
+## Omitted items in a response (0.3.5)
+
+Claude occasionally leaves one item out of a long batch. Each returned item is still fully validated. The omitted items are then requested again in one smaller follow-up request, which reserves its own source bytes. If an item is still missing after that, the whole batch is rejected without saving and the job names the dictionary row. Responses with extra, duplicate or unknown items are still rejected outright.
 
 ## WP-cron batches (0.3.4)
 

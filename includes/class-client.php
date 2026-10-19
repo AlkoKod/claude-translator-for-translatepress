@@ -6,7 +6,8 @@ final class CTP_Client {
     public const MAX_BYTES = 12000;
     public const MAX_STRINGS = 16;
 
-    public function translate( array $strings, string $source, string $target ): array {
+    /** @param bool $retry_missing Re-request, once, items the model omitted from an otherwise valid response. */
+    public function translate( array $strings, string $source, string $target, bool $retry_missing = true ): array {
         CTP_Support::$error = null;
         CTP_Support::$failed_original = null;
         $strings = array_filter( $strings, static fn( $text ) => ! is_string( $text ) || ! CTP_Support::is_xml_declaration( $text ) );
@@ -95,7 +96,7 @@ final class CTP_Client {
             }
             $payload = json_decode( $text_blocks[0]['text'], true );
             $rows = is_array( $payload ) && array_keys( $payload ) === array( 'translations' ) ? $payload['translations'] : null;
-            if ( ! is_array( $rows ) || ! array_is_list( $rows ) || count( $rows ) !== count( $items ) ) {
+            if ( ! is_array( $rows ) || ! array_is_list( $rows ) || count( $rows ) > count( $items ) ) {
                 throw new RuntimeException( 'Response has missing or extra translations.' );
             }
             $result = $seen = array();
@@ -115,11 +116,24 @@ final class CTP_Client {
                     throw new RuntimeException( 'Translation item ' . $id . ': ' . $e->getMessage() );
                 }
             }
-            return $result + $unchanged;
         } catch ( Throwable $e ) {
             CTP_Support::fail( 'invalid_response', $e->getMessage() );
             return array();
         }
+        // Models occasionally omit an item from a long batch; every returned item has already been validated.
+        $omitted = array();
+        foreach ( array_diff_key( $codecs, $seen ) as [ $key ] ) { $omitted[$key] = $strings[$key]; }
+        if ( $omitted ) {
+            if ( ! $retry_missing ) {
+                CTP_Support::$failed_original = reset( $omitted );
+                CTP_Support::fail( 'invalid_response', 'Response omitted ' . count( $omitted ) . ' translation(s) again after a retry. No translation was saved.' );
+                return array();
+            }
+            $retried = $this->translate( $omitted, $source, $target, false );
+            if ( CTP_Support::$error ) { return array(); }
+            $result += $retried;
+        }
+        return $result + $unchanged;
     }
 
     /** Classify upstream errors using fixed messages only; never display or store the upstream body. */
