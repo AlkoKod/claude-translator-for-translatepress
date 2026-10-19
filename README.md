@@ -2,7 +2,23 @@
 
 A small, independent WordPress plugin that adds **Anthropic Claude (direct API)** to TranslatePress's native automatic translation providers, plus a resumable bulk translation runner.
 
-**0.3.1 is a preview release.** The local integration suite passes against WordPress 7.1.3, TranslatePress 3.3.8 and the Developer 1.8.8 add-on, on PHP 8.4.26 and MariaDB 11.4.5. Anthropic responses are mocked in automated tests; a live-key smoke test and staging verification are required before production use. No premium TranslatePress code is included in this repository.
+**0.3.5 is a preview release.** The local integration suite passes against WordPress 7.1.3, TranslatePress 3.3.8 and the Developer 1.8.8 add-on, on PHP 8.4.26 and MariaDB 11.4.5. Anthropic responses are mocked in automated tests; a live-key smoke test and staging verification are required before production use. No premium TranslatePress code is included in this repository.
+
+## Omitted items in a response (0.3.5)
+
+Claude occasionally leaves one item out of a long batch. Each returned item is still fully validated. The omitted items are then requested again in one smaller follow-up request, which reserves its own source bytes. If an item is still missing after that, the whole batch is rejected without saving and the job names the dictionary row. Responses with extra, duplicate or unknown items are still rejected outright.
+
+## WP-cron batches (0.3.4)
+
+TranslatePress can skip its hooks on `/wp-cron.php`, for example when "Do not translate certain paths" is set. Its selected engine is then never loaded, and batches run by cron were left untranslated, so the job paused after every batch or two. Bulk mode now loads the Claude engine itself before each batch, the same way TranslatePress handles WooCommerce cron emails.
+
+## Persistence failure causes (0.3.3)
+
+When a bulk batch is not saved, the job error lists the unsaved row IDs and the cause observed in that request: TranslatePress did not call the engine, strings were held by another request's translation lock (wait about a minute and resume), the engine returned nothing, a `trp_allow_string_saving` filter refused the save, the dictionary write returned a database error (quoted), or TranslatePress did not attempt the save.
+
+## Reviewed variants and persistence errors (0.3.2)
+
+TranslatePress matches dictionary originals using the table's case- and accent-insensitive collation. A human-reviewed row such as `Wellness` used to make the save guard reject a whole batch containing a pending `wellness`, so the job stopped on every resume with "Some translations were not persisted". These pending rows are now left untranslated for manual review, shown as a separate counter in the job status, and never sent to Claude. If a save still fails, the error lists the exact regular or gettext row IDs that were not saved.
 
 ## Output validation and non-linguistic input (0.3.1)
 

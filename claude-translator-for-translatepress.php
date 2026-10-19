@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Claude Translator for TranslatePress
  * Description: Direct Anthropic Claude translation engine and resumable whole-site translation for TranslatePress.
- * Version: 0.3.1
+ * Version: 0.3.5
  * Requires at least: 6.5
  * Requires PHP: 8.1
  * Requires Plugins: translatepress-multilingual
@@ -10,7 +10,7 @@
  * Text Domain: claude-translator-for-translatepress
  */
 defined( 'ABSPATH' ) || exit;
-define( 'CTP_VERSION', '0.3.1' );
+define( 'CTP_VERSION', '0.3.5' );
 define( 'CTP_FILE', __FILE__ );
 define( 'CTP_DIR', __DIR__ . '/' );
 require_once CTP_DIR . 'includes/class-support.php';
@@ -58,6 +58,21 @@ add_filter( 'trp_allow_string_saving', static function ( $allow, $new, $updates 
     }
     return $allow;
 }, 20, 3 );
+// Record the final save decision and dictionary write errors so a failed bulk batch can name its cause.
+add_filter( 'trp_allow_string_saving', static function ( $allow, $new, $updates ) {
+    if ( CTP_Support::$diag !== null ) {
+        CTP_Support::$diag['save_calls'][] = array( 'allowed' => (bool) $allow, 'rows' => is_array( $updates ) ? count( $updates ) : 0 );
+    }
+    return $allow;
+}, PHP_INT_MAX, 3 );
+add_filter( 'query', static function ( $sql ) {
+    global $wpdb;
+    if ( CTP_Support::$diag === null ) { return $sql; }
+    // wpdb runs this filter before flush(), so last_error still belongs to the previous statement.
+    if ( CTP_Support::$diag['pending_write'] && $wpdb->last_error !== '' ) { CTP_Support::$diag['db_error'] = $wpdb->last_error; }
+    CTP_Support::$diag['pending_write'] = stripos( ltrim( (string) $sql ), 'INSERT INTO `' . CTP_Support::$diag['table'] . '`' ) === 0;
+    return $sql;
+}, PHP_INT_MAX );
 if ( defined( 'WP_CLI' ) && WP_CLI ) {
     require_once CTP_DIR . 'includes/class-cli.php';
     WP_CLI::add_command( 'ctp', 'CTP_CLI' );

@@ -186,6 +186,7 @@ final class CTP_Bulk {
             if ( ! $job || get_option( 'ctp_paused', true ) || in_array( $job['phase'], array( 'done', 'cancelled' ), true ) ) { return self::status(); }
             try {
                 self::assert_ready();
+                self::engine();
                 $settings = CTP_Support::trp_settings();
                 if ( $job['source'] !== $settings['default-language'] || array_diff( $job['languages'], $settings['translation-languages'] ) ) {
                     throw new RuntimeException( 'TranslatePress languages changed. Cancel this job and start a new one.' );
@@ -268,7 +269,8 @@ final class CTP_Bulk {
             }
             return;
         }
-        $strings = $processed_ids = array(); $bytes = 0; $cursor = $job['cursor']; $skipped = $xml_skipped = 0;
+        $strings = $processed_ids = array(); $bytes = 0; $cursor = $job['cursor']; $skipped = $xml_skipped = $reviewed_skipped = 0;
+        $reviewed = $query->get_constant_human_reviewed();
         foreach ( $rows as $row ) {
             $text = $row['original'];
             if ( CTP_Support::is_xml_declaration( $text ) ) { $cursor = (int) $row['id']; ++$skipped; ++$xml_skipped; continue; }
@@ -278,12 +280,23 @@ final class CTP_Bulk {
             }
             $cursor = (int) $row['id'];
             if ( trim( $text ) === '' || filter_var( $text, FILTER_VALIDATE_URL ) || preg_match( '~^(?:mailto:|tel:|#)~i', $text ) ) { ++$skipped; continue; }
+            // The save guard matches originals by table collation; one reviewed case/accent/space variant would veto the whole batch.
+            if ( $wpdb->get_var( $wpdb->prepare( "SELECT id FROM `{$table}` WHERE original = %s AND status = %d AND id <> %d LIMIT 1", $text, $reviewed, $cursor ) ) ) {
+                ++$skipped; ++$reviewed_skipped; continue;
+            }
             $strings[] = $text; $processed_ids[] = $cursor; $bytes += strlen( $text );
         }
         if ( $strings ) {
             CTP_Support::$bulk = true; CTP_Support::$error = null; CTP_Support::$failed_original = null;
-            // TRP's normal renderer consults its dictionary before calling our engine and saves results itself.
-            $trp->get_component( 'translation_render' )->process_strings( $strings, $language );
+            $engine = self::engine();
+            $locked_before = $engine->lock_skipped_count();
+            CTP_Support::$diag = array( 'table' => $table, 'engine_calls' => 0, 'requested' => 0, 'returned' => 0, 'save_calls' => array(), 'pending_write' => false, 'db_error' => '' );
+            try {
+                // TRP's normal renderer consults its dictionary before calling our engine and saves results itself.
+                $trp->get_component( 'translation_render' )->process_strings( $strings, $language );
+                $wpdb->query( 'SELECT 1' ); // Flushes a trailing dictionary-write error into the diagnostics.
+                $diag = CTP_Support::$diag;
+            } finally { CTP_Support::$diag = null; }
             if ( CTP_Support::$error ) {
                 foreach ( $rows as $row ) {
                     if ( $row['original'] === CTP_Support::$failed_original ) { throw new RuntimeException( 'Translation validation failed at dictionary row ' . (int) $row['id'] . ': ' . CTP_Support::$error->get_error_message() ); }
@@ -291,15 +304,64 @@ final class CTP_Bulk {
                 throw new RuntimeException( CTP_Support::$error->get_error_message() );
             }
             // Verify the exact pending row IDs; a collation-equivalent title is not proof that a slug row was saved.
-            $pending = (int) $wpdb->get_var( "SELECT COUNT(*) FROM `{$table}` WHERE id IN (" . implode( ',', $processed_ids ) . ') AND status=0' );
-            if ( $wpdb->last_error || $pending ) {
-                throw new RuntimeException( 'Some translations were not persisted. Check the TRP daily quota and error log, then resume. Saved strings will be reused.' );
+            $pending = $wpdb->get_col( "SELECT id FROM `{$table}` WHERE id IN (" . implode( ',', $processed_ids ) . ') AND status=0 ORDER BY id' );
+            if ( $wpdb->last_error ) { throw new RuntimeException( 'Cannot verify saved translations in the TRP dictionary.' ); }
+            if ( $pending ) {
+                throw new RuntimeException( 'Some translations were not persisted (dictionary rows ' . implode( ', ', array_map( 'intval', $pending ) ) . '). ' . self::persist_reason( $diag, $engine, $locked_before, count( $strings ) ) . ' Saved strings will be reused.' );
             }
             $job['translated'] += count( array_unique( $strings ) );
         }
         $job['skipped'] += $skipped;
         $job['xml_declarations'] = ( $job['xml_declarations'] ?? 0 ) + $xml_skipped;
+        $job['reviewed_equivalents'] = ( $job['reviewed_equivalents'] ?? 0 ) + $reviewed_skipped;
         $job['cursor'] = $cursor;
+    }
+
+    /**
+     * WP-cron requests can skip TRP's hook loader (e.g. "Do not translate certain paths" does not match /wp-cron.php),
+     * leaving its placeholder engine, which is never available. TRP repairs WooCommerce cron emails the same way.
+     */
+    private static function engine(): CTP_Engine {
+        $trp = TRP_Translate_Press::get_trp_instance();
+        if ( ! $trp->get_component( 'machine_translator' ) instanceof CTP_Engine && method_exists( $trp, 'init_machine_translation' ) ) {
+            $trp->init_machine_translation();
+        }
+        $engine = $trp->get_component( 'machine_translator' );
+        if ( ! $engine instanceof CTP_Engine ) {
+            throw new RuntimeException( 'TranslatePress did not load the Claude engine in this request. Save the TranslatePress Automatic Translation settings, then resume.' );
+        }
+        // The renderer caches the engine lazily; replace a placeholder cached before initialization.
+        ( function () use ( $engine ) { if ( $this->machine_translator && ! $this->machine_translator instanceof CTP_Engine ) { $this->machine_translator = $engine; } } )
+            ->call( $trp->get_component( 'translation_render' ) );
+        return $engine;
+    }
+
+    /** Explain an unsaved batch from what this request observed; never guesses beyond that evidence. */
+    private static function persist_reason( array $diag, $engine, int $locked_before, int $sent ): string {
+        global $trp_machine_translation_deadline;
+        $locked = $engine instanceof CTP_Engine ? $engine->lock_skipped_count() - $locked_before : 0;
+        if ( ! $diag['engine_calls'] ) {
+            if ( isset( $trp_machine_translation_deadline ) && microtime( true ) > $trp_machine_translation_deadline ) {
+                return 'Cause: TranslatePress did not call the engine because its per-request time budget (trp_machine_translation_time_budget) had expired.';
+            }
+            return 'Cause: TranslatePress did not call the engine for these strings; it treated them as already present in its dictionary or not machine-translatable.';
+        }
+        if ( $locked > 0 ) {
+            return 'Cause: TranslatePress skipped ' . $locked . ' of ' . $sent . ' strings because another request holds their translation lock (in progress or translated within the last ~50 s). Wait a minute, then resume.';
+        }
+        if ( ! $diag['returned'] ) {
+            return 'Cause: the engine returned no translations.' . ( $engine instanceof CTP_Engine ? ' TRP characters today: ' . implode( ' of ', $engine->quota_state() ) . '.' : '' );
+        }
+        if ( array_filter( $diag['save_calls'], static fn( $call ) => ! $call['allowed'] ) ) {
+            return 'Cause: a trp_allow_string_saving filter rejected the save (a human-reviewed equivalent, a translation reset, or another plugin).';
+        }
+        if ( $diag['db_error'] !== '' ) {
+            return 'Cause: the TRP dictionary write failed with a database error: ' . mb_substr( preg_replace( '/[\x00-\x1f\x7f]/', ' ', $diag['db_error'] ), 0, 300 ) . '.';
+        }
+        if ( ! $diag['save_calls'] ) {
+            return 'Cause: TranslatePress received ' . $diag['returned'] . ' translations but did not attempt to save them; their originals did not match its original-strings table.';
+        }
+        return 'Cause: TranslatePress saved ' . array_sum( array_column( $diag['save_calls'], 'rows' ) ) . ' rows, but not these dictionary rows. Check for duplicate originals that differ only in case, accents or spacing.';
     }
 
     private static function gettext( array &$job ): void {
@@ -348,8 +410,9 @@ final class CTP_Bulk {
                 throw new RuntimeException( CTP_Support::$error->get_error_message() );
             }
             $ids = array_map( 'intval', array_column( $queue, 'id' ) );
-            $pending = (int) $wpdb->get_var( "SELECT COUNT(*) FROM `{$table}` WHERE id IN (" . implode( ',', $ids ) . ') AND status=0' );
-            if ( $wpdb->last_error || $pending ) { throw new RuntimeException( 'Gettext translations were not saved. Check TRP exclusions and quota, then resume.' ); }
+            $pending = $wpdb->get_col( "SELECT id FROM `{$table}` WHERE id IN (" . implode( ',', $ids ) . ') AND status=0 ORDER BY id' );
+            if ( $wpdb->last_error ) { throw new RuntimeException( 'Cannot verify saved translations in the TRP gettext table.' ); }
+            if ( $pending ) { throw new RuntimeException( 'Gettext translations were not saved (gettext rows ' . implode( ', ', array_map( 'intval', $pending ) ) . '). Check TRP exclusions and quota, then resume.' ); }
             $job['translated'] += count( $queue );
         }
         $job['skipped'] += $xml_skipped;

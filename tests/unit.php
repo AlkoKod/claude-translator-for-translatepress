@@ -87,6 +87,9 @@ $GLOBALS['http_mock'] = function ( $url, $args ) use ( &$calls, &$mode ) {
     if ( $mode === 'empty' ) { $translations[0]['text'] = ''; }
     if ( $mode === 'angle' ) { $translations[0]['text'] .= ' >'; }
     if ( $mode === 'extra_field' ) { $translations[0]['unexpected'] = 'bad'; }
+    if ( $mode === 'omit_once' && count( $translations ) > 1 ) { array_pop( $translations ); }
+    if ( $mode === 'omit_always' ) { array_pop( $translations ); }
+    if ( $mode === 'extra_row' ) { $translations[] = $translations[0]; }
     $text = $mode === 'bad_json' ? '{invalid' : json_encode( array( 'translations' => array_reverse( $translations ) ) );
     $content = array( array( 'type' => 'text', 'text' => $text ) );
     if ( $mode === 'two_texts' ) { $content[] = $content[0]; }
@@ -131,7 +134,13 @@ check( strlen( $diagnostic ) < 1800, 'diagnostic detail length bounded' );
 check( str_contains( $diagnostic, 'req_abcdef1234567890' ), 'body request ID fallback supported' );
 $out = $client->translate( array( 8 => 'Vítejte', 19 => '<b>Vítejte</b>' ), 'cs_CZ', 'de_DE' );
 check( $out[8] === 'Willkommen' && $out[19] === '<b>Willkommen</b>', 'IDs preserve non-sequential TRP keys despite reversed output' );
-foreach ( array( 'duplicate', 'html', 'empty', 'angle', 'truncated', '429', 'network', 'bad_json', 'extra_field', 'two_texts', 'tool_response', 'refusal' ) as $mode ) {
+$mode = 'omit_once'; $calls = 0;
+$out = $client->translate( array( 3 => 'Vítejte', 7 => 'Vítejte znovu' ), 'cs_CZ', 'de_DE' );
+check( $out === array( 3 => 'Willkommen', 7 => 'Willkommen znovu' ) && $calls === 2 && CTP_Support::$error === null, 'omitted item is re-requested once and merged by TRP key' );
+$mode = 'omit_always'; $calls = 0;
+check( $client->translate( array( 'Vítejte', 'Vítejte znovu' ), 'cs_CZ', 'de_DE' ) === array() && $calls === 2, 'repeated omission rejects the batch after exactly one retry' );
+check( str_contains( CTP_Support::$error->get_error_message(), 'omitted 1 translation(s) again' ) && CTP_Support::$failed_original === 'Vítejte znovu', 'repeated omission names the original for row diagnostics' );
+foreach ( array( 'duplicate', 'extra_row', 'html', 'empty', 'angle', 'truncated', '429', 'network', 'bad_json', 'extra_field', 'two_texts', 'tool_response', 'refusal' ) as $mode ) {
     check( $client->translate( array( 'Vítejte', 'Vítejte znovu' ), 'cs_CZ', 'de_DE' ) === array(), 'bad response rejected atomically: ' . $mode );
     check( ! str_contains( CTP_Support::$error->get_error_message(), 'SECRET' ), 'upstream body never leaked' );
     if ( in_array( $mode, array( 'html', 'empty', 'angle' ), true ) ) { check( CTP_Support::$failed_original === 'Vítejte', 'invalid model output identifies exact original without exposing output' ); }

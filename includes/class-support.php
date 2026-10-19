@@ -9,6 +9,8 @@ final class CTP_Support {
     public static ?string $write_language = null;
     public static array $write_originals = array();
     public static ?string $write_epoch = null;
+    /** Per-batch evidence for explaining why TRP did not persist a bulk batch; null outside a bulk batch. */
+    public static ?array $diag = null;
 
     /** Bypass the per-request option cache so in-flight responses observe a concurrent reset. */
     public static function reset_epoch(): string {

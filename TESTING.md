@@ -1,4 +1,4 @@
-# Verification record — 0.3.1 preview
+# Verification record — 0.3.5 preview
 
 Date: 2026-10-16.
 
@@ -43,3 +43,11 @@ Version 0.3.0: 200 protocol/security assertions, 35 admin UI assertions, 22 real
 
 Version 0.3.1: 230 protocol/security assertions, 35 admin UI assertions, 10 real TRP output-validation assertions, 22 reset assertions, 12 XML assertions and 12 inspector assertions passed. Tests verify protected operators/entities, non-linguistic bypass without network/usage, continued rejection of injected HTML/empty output, exact failed-row diagnostics and inspector support. Real TRP may canonicalize entity spelling; persistence tests compare rendered text. No live model response from the user's failure has been inspected, so its original cause remains unconfirmed. All API responses in tests are mocked.
 The full 21-assertion bulk integration suite also passed sequentially on 0.3.1, including persistence reuse on a second complete run.
+
+Version 0.3.2: PHP lint, 230 standalone protocol/security assertions and 35 admin UI assertions pass on PHP 8.4 and in GitHub CI on PHP 8.1–8.5. The new `tests/reviewed-integration.php` (reviewed collation-equivalent skip, partial-batch save, cursor advance, unsaved row IDs in the error) has not yet been run against real WordPress/TRP.
+
+Version 0.3.3: PHP lint, 230 standalone protocol/security assertions and 35 admin UI assertions pass on PHP 8.4. Cause diagnostics were written against the TranslatePress 3.3.8 process_strings/lock code. Only the save-veto cause has an integration assertion (`tests/reviewed-integration.php`), and that test has not yet been run against real WordPress/TRP.
+
+Version 0.3.4: PHP lint, 230 standalone and 35 admin UI assertions pass on PHP 8.4. The cron/placeholder-engine cause was identified from the production diagnostic and the TranslatePress 3.3.8 source. `tests/reviewed-integration.php` adds a placeholder-engine assertion, but that test has not yet been run against real WordPress/TRP.
+
+Version 0.3.5: PHP lint, 265 standalone protocol/security assertions (new: single re-request of omitted items merged by TRP key, rejection after a repeated omission with the original identified, extra rows rejected) and 35 admin UI assertions pass on PHP 8.4. Not run against real WordPress/TRP or a live API.
