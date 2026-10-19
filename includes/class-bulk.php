@@ -268,7 +268,8 @@ final class CTP_Bulk {
             }
             return;
         }
-        $strings = $processed_ids = array(); $bytes = 0; $cursor = $job['cursor']; $skipped = $xml_skipped = 0;
+        $strings = $processed_ids = array(); $bytes = 0; $cursor = $job['cursor']; $skipped = $xml_skipped = $reviewed_skipped = 0;
+        $reviewed = $query->get_constant_human_reviewed();
         foreach ( $rows as $row ) {
             $text = $row['original'];
             if ( CTP_Support::is_xml_declaration( $text ) ) { $cursor = (int) $row['id']; ++$skipped; ++$xml_skipped; continue; }
@@ -278,6 +279,10 @@ final class CTP_Bulk {
             }
             $cursor = (int) $row['id'];
             if ( trim( $text ) === '' || filter_var( $text, FILTER_VALIDATE_URL ) || preg_match( '~^(?:mailto:|tel:|#)~i', $text ) ) { ++$skipped; continue; }
+            // The save guard matches originals by table collation; one reviewed case/accent/space variant would veto the whole batch.
+            if ( $wpdb->get_var( $wpdb->prepare( "SELECT id FROM `{$table}` WHERE original = %s AND status = %d AND id <> %d LIMIT 1", $text, $reviewed, $cursor ) ) ) {
+                ++$skipped; ++$reviewed_skipped; continue;
+            }
             $strings[] = $text; $processed_ids[] = $cursor; $bytes += strlen( $text );
         }
         if ( $strings ) {
@@ -291,14 +296,16 @@ final class CTP_Bulk {
                 throw new RuntimeException( CTP_Support::$error->get_error_message() );
             }
             // Verify the exact pending row IDs; a collation-equivalent title is not proof that a slug row was saved.
-            $pending = (int) $wpdb->get_var( "SELECT COUNT(*) FROM `{$table}` WHERE id IN (" . implode( ',', $processed_ids ) . ') AND status=0' );
-            if ( $wpdb->last_error || $pending ) {
-                throw new RuntimeException( 'Some translations were not persisted. Check the TRP daily quota and error log, then resume. Saved strings will be reused.' );
+            $pending = $wpdb->get_col( "SELECT id FROM `{$table}` WHERE id IN (" . implode( ',', $processed_ids ) . ') AND status=0 ORDER BY id' );
+            if ( $wpdb->last_error ) { throw new RuntimeException( 'Cannot verify saved translations in the TRP dictionary.' ); }
+            if ( $pending ) {
+                throw new RuntimeException( 'Some translations were not persisted (dictionary rows ' . implode( ', ', array_map( 'intval', $pending ) ) . '). Check the TRP daily quota and error log, then resume. Saved strings will be reused.' );
             }
             $job['translated'] += count( array_unique( $strings ) );
         }
         $job['skipped'] += $skipped;
         $job['xml_declarations'] = ( $job['xml_declarations'] ?? 0 ) + $xml_skipped;
+        $job['reviewed_equivalents'] = ( $job['reviewed_equivalents'] ?? 0 ) + $reviewed_skipped;
         $job['cursor'] = $cursor;
     }
 
@@ -348,8 +355,9 @@ final class CTP_Bulk {
                 throw new RuntimeException( CTP_Support::$error->get_error_message() );
             }
             $ids = array_map( 'intval', array_column( $queue, 'id' ) );
-            $pending = (int) $wpdb->get_var( "SELECT COUNT(*) FROM `{$table}` WHERE id IN (" . implode( ',', $ids ) . ') AND status=0' );
-            if ( $wpdb->last_error || $pending ) { throw new RuntimeException( 'Gettext translations were not saved. Check TRP exclusions and quota, then resume.' ); }
+            $pending = $wpdb->get_col( "SELECT id FROM `{$table}` WHERE id IN (" . implode( ',', $ids ) . ') AND status=0 ORDER BY id' );
+            if ( $wpdb->last_error ) { throw new RuntimeException( 'Cannot verify saved translations in the TRP gettext table.' ); }
+            if ( $pending ) { throw new RuntimeException( 'Gettext translations were not saved (gettext rows ' . implode( ', ', array_map( 'intval', $pending ) ) . '). Check TRP exclusions and quota, then resume.' ); }
             $job['translated'] += count( $queue );
         }
         $job['skipped'] += $xml_skipped;
