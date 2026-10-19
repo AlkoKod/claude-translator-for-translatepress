@@ -1,4 +1,4 @@
-# Verification record — 0.3.5 preview
+# Verification record — 0.3.6 preview
 
 Date: 2026-10-16.
 
@@ -51,3 +51,5 @@ Version 0.3.3: PHP lint, 230 standalone protocol/security assertions and 35 admi
 Version 0.3.4: PHP lint, 230 standalone and 35 admin UI assertions pass on PHP 8.4. The cron/placeholder-engine cause was identified from the production diagnostic and the TranslatePress 3.3.8 source. `tests/reviewed-integration.php` adds a placeholder-engine assertion, but that test has not yet been run against real WordPress/TRP.
 
 Version 0.3.5: PHP lint, 265 standalone protocol/security assertions (new: single re-request of omitted items merged by TRP key, rejection after a repeated omission with the original identified, extra rows rejected) and 35 admin UI assertions pass on PHP 8.4. Not run against real WordPress/TRP or a live API.
+
+Version 0.3.6: PHP lint, 284 standalone protocol/security assertions (new: an empty response retries each item alone, an item omitted even alone is recorded without failing, translated items are kept) and 35 admin UI assertions pass on PHP 8.4. The bulk-level skip of omitted rows has not been run against real WordPress/TRP or the live API.

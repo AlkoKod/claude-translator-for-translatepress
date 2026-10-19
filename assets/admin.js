@@ -25,6 +25,7 @@
       `Strings processed: ${job.translated || 0} · skipped: ${job.skipped || 0}`,
       job.xml_declarations ? `XML declarations left unchanged (no API call): ${job.xml_declarations}` : '',
       job.reviewed_equivalents ? `Left for review (a reviewed variant differing only in case, accents or spacing exists): ${job.reviewed_equivalents}` : '',
+      job.omitted ? `Left untranslated (Claude returned nothing, even when sent alone): ${job.omitted}${job.omitted_rows?.length ? ` — ${job.phase === 'gettext' ? 'gettext' : 'dictionary'} rows ${job.omitted_rows.join(', ')}` : ''}` : '',
       `Reserved source bytes today (${job.usage?.day || new Date().toISOString().slice(0, 10)} UTC): ${Number.isFinite(Number(job.usage?.characters)) ? Number(job.usage.characters) : 0}`,
       job.error ? `Attention: ${job.error}` : '',
       job.phase === 'done' ? 'Run finished. Clear affected translated-page caches and review translations in TRP.' : '',

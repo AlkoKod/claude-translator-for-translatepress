@@ -3,7 +3,7 @@ Tags: translatepress, claude, translation, anthropic, multilingual
 Requires at least: 6.5
 Tested up to: 7.1.3
 Requires PHP: 8.1
-Stable tag: 0.3.5
+Stable tag: 0.3.6
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -50,6 +50,9 @@ No. Extra languages, SEO Pack and other premium features still require your norm
 It uses TRP's rendered HTML extraction. Gutenberg rendering and representative Divi/Oxygen/Bricks HTML fixtures are tested. Full builder plugin certification is not claimed.
 
 == Changelog ==
+
+= 0.3.6 =
+A text Claude will not translate no longer stops the bulk job. Items missing from a response are now sent again one at a time, so one problem text cannot block the rest of the batch. A text that still gets no translation when sent alone stays untranslated, and its row ID appears in the job status ("Left untranslated") so it can be translated manually in TranslatePress. Replaces the 0.3.5 behaviour, which rejected the whole batch after one retry.
 
 = 0.3.5 =
 A bulk job no longer stops with "Response has missing or extra translations" when Claude leaves an item out of an otherwise valid response. The returned items are validated and kept, and only the missing ones are requested again, once. If they are missing again, the batch is rejected and the error names the dictionary row. Extra, duplicate or unknown items are still rejected.

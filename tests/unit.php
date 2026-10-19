@@ -4,6 +4,7 @@ define( 'ABSPATH', __DIR__ . '/' );
 final class WP_Error {
     public function __construct( public string $code, public string $message ) {}
     public function get_error_message(): string { return $this->message; }
+    public function get_error_code(): string { return $this->code; }
 }
 $GLOBALS['ctp_options'] = array();
 function get_option( $key, $default = false ) { return $GLOBALS['ctp_options'][$key] ?? $default; }
@@ -89,6 +90,7 @@ $GLOBALS['http_mock'] = function ( $url, $args ) use ( &$calls, &$mode ) {
     if ( $mode === 'extra_field' ) { $translations[0]['unexpected'] = 'bad'; }
     if ( $mode === 'omit_once' && count( $translations ) > 1 ) { array_pop( $translations ); }
     if ( $mode === 'omit_always' ) { array_pop( $translations ); }
+    if ( $mode === 'omit_all' ) { $translations = array(); }
     if ( $mode === 'extra_row' ) { $translations[] = $translations[0]; }
     $text = $mode === 'bad_json' ? '{invalid' : json_encode( array( 'translations' => array_reverse( $translations ) ) );
     $content = array( array( 'type' => 'text', 'text' => $text ) );
@@ -138,8 +140,12 @@ $mode = 'omit_once'; $calls = 0;
 $out = $client->translate( array( 3 => 'Vítejte', 7 => 'Vítejte znovu' ), 'cs_CZ', 'de_DE' );
 check( $out === array( 3 => 'Willkommen', 7 => 'Willkommen znovu' ) && $calls === 2 && CTP_Support::$error === null, 'omitted item is re-requested once and merged by TRP key' );
 $mode = 'omit_always'; $calls = 0;
-check( $client->translate( array( 'Vítejte', 'Vítejte znovu' ), 'cs_CZ', 'de_DE' ) === array() && $calls === 2, 'repeated omission rejects the batch after exactly one retry' );
-check( str_contains( CTP_Support::$error->get_error_message(), 'omitted 1 translation(s) again' ) && CTP_Support::$failed_original === 'Vítejte znovu', 'repeated omission names the original for row diagnostics' );
+check( $client->translate( array( 'Vítejte', 'Vítejte znovu' ), 'cs_CZ', 'de_DE' ) === array( 'Willkommen' ) && $calls === 2, 'repeated omission keeps the translated items after one single-item retry' );
+check( CTP_Support::$error === null && CTP_Support::$omitted === array( 'Vítejte znovu' ), 'text omitted even alone is recorded, not a batch failure' );
+$mode = 'omit_all'; $calls = 0; CTP_Support::$omitted = array();
+$out = $client->translate( array( 4 => 'Vítejte', 9 => 'Vítejte znovu' ), 'cs_CZ', 'de_DE' );
+check( $out === array() && $calls === 3 && CTP_Support::$error === null && count( CTP_Support::$omitted ) === 2, 'empty response retries each item alone and records both' );
+CTP_Support::$omitted = array();
 foreach ( array( 'duplicate', 'extra_row', 'html', 'empty', 'angle', 'truncated', '429', 'network', 'bad_json', 'extra_field', 'two_texts', 'tool_response', 'refusal' ) as $mode ) {
     check( $client->translate( array( 'Vítejte', 'Vítejte znovu' ), 'cs_CZ', 'de_DE' ) === array(), 'bad response rejected atomically: ' . $mode );
     check( ! str_contains( CTP_Support::$error->get_error_message(), 'SECRET' ), 'upstream body never leaked' );
